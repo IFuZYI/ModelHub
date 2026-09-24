@@ -2,7 +2,7 @@ import { decrypt } from "../infra/crypto";
 import { config } from "../config/env";
 import { logger } from "../infra/logger";
 import type { Logger } from "../infra/logger";
-import { AppError } from "../domain/errors";
+import { AppError, isAppError } from "../domain/errors";
 import { StoredProvider } from "../domain/provider";
 import { fileRepository, ProviderRepository } from "../infra/repository";
 import { fetchWithTimeout } from "../infra/http";
@@ -13,6 +13,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
+}
+
+/** True when an AppError.upstream detail marks a 401/403 auth challenge. */
+function isAuthStatus(details: unknown): boolean {
+  if (details && typeof details === "object" && "status" in details) {
+    const s = (details as { status?: unknown }).status;
+    return s === 401 || s === 403;
+  }
+  return false;
 }
 
 /**
@@ -116,6 +125,7 @@ export async function fetchProviderModels(
   const attempts = adapter.buildAttempts(provider.base_url, key);
 
   const errors: string[] = [];
+  let sawAuthError = false; // any attempt failed purely on 401/403
   for (const attempt of attempts) {
     try {
       const models = await runAttempt(attempt, log);
@@ -137,9 +147,24 @@ export async function fetchProviderModels(
       errors.push(`${attempt.name}: empty`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      if (isAppError(err) && isAuthStatus(err.details)) sawAuthError = true;
       log.warn({ via: attempt.name }, `attempt failed: ${message}`);
       errors.push(`${attempt.name}: ${message}`);
     }
+  }
+
+  // No key stored + every failure was an auth challenge (401/403): this is an
+  // expected "needs a key" state, not a broken provider. Keep seed models and
+  // flag it distinctly so the UI can prompt for a key instead of "刷新失败".
+  if (!key && sawAuthError) {
+    log.info({ errors }, "auth required; awaiting API key");
+    return {
+      ...provider,
+      last_fetched: now(),
+      last_status: "needs_key",
+      last_error: null,
+      updated_at: provider.updated_at,
+    };
   }
 
   // All attempts exhausted — preserve cached models, record why.

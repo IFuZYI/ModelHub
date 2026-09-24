@@ -834,6 +834,10 @@ main {
 .dot.pending {
   background: var(--pending);
 }
+.dot.needs_key {
+  background: var(--pending);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pending) 18%, transparent);
+}
 
 /* ---------- buttons ---------- */
 .btn {
@@ -956,17 +960,21 @@ main {
 }
 .model-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
 }
 .model-item {
+  display: flex;
+  align-items: center;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: var(--ring);
-  font: 500 13px/1.3 var(--mono);
+  font: 500 13px/1.4 var(--mono);
   color: var(--text-2);
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition:
     transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
     background 0.18s ease,
@@ -978,6 +986,65 @@ main {
   color: var(--text);
   transform: translateY(-2px);
   box-shadow: var(--shadow-card);
+}
+
+/* vendor category filter (newapi-style) */
+.vendor-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.vendor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: 0.16s ease;
+}
+.vendor-chip:hover {
+  border-color: var(--line-2);
+  color: var(--text-2);
+}
+.vendor-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.vendor-chip-count {
+  font: 500 11px/1 var(--mono);
+  opacity: 0.7;
+}
+.vendor-chip.active .vendor-chip-count {
+  opacity: 0.85;
+}
+/* model group section */
+.model-group {
+  margin-bottom: 26px;
+}
+.model-group:last-child {
+  margin-bottom: 0;
+}
+.model-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.model-group-count {
+  color: var(--text-4);
 }
 .error-box {
   background: var(--err-tint);
@@ -1339,4 +1406,158 @@ main {
   gap: 10px;
   flex-wrap: wrap;
   margin: 18px 0 4px;
+}
+
+/* grouped admin listing: 官方(原生/中转) / 其他(NewAPI/自建) */
+.admin-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.admin-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-group-count {
+  font: 500 12px/1 var(--mono);
+  color: var(--text-4);
+}
+.admin-subgroup {
+  margin-bottom: 24px;
+}
+.admin-subgroup:last-child {
+  margin-bottom: 0;
+}
+.admin-subgroup-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.admin-subgroup-count {
+  color: var(--text-4);
+}
+
+/* ============================================================
+   Responsive — tablet & mobile adaptation
+   ============================================================ */
+
+/* Tablet and below */
+@media (max-width: 860px) {
+  .shell {
+    width: min(1200px, calc(100% - 32px));
+  }
+  main {
+    padding: 40px 0 72px;
+  }
+  .intro h1 {
+    font-size: clamp(30px, 8vw, 48px);
+  }
+  .detail-title {
+    font-size: clamp(22px, 6vw, 32px);
+  }
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .modal {
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .choice-grid,
+  .choice-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Phones */
+@media (max-width: 560px) {
+  .shell {
+    width: calc(100% - 24px);
+  }
+  main {
+    padding: 28px 0 56px;
+  }
+  /* header: keep brand + actions on one row, allow wrap of action buttons */
+  .header-inner {
+    height: auto;
+    min-height: 56px;
+    padding: 10px 0;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .brand-sub {
+    display: none; /* drop the small "Model Directory" caption on phones */
+  }
+  .icon-btn {
+    height: 34px;
+    padding: 0 11px;
+    font-size: 12.5px;
+  }
+  .intro h1 {
+    font-size: clamp(26px, 9vw, 36px);
+  }
+  .intro p {
+    font-size: 14px;
+  }
+  /* toolbar: stack search + sort vertically */
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+  .sort-select,
+  .sel-trigger {
+    width: 100%;
+  }
+  /* one column card + model grids on phones */
+  .card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .model-list {
+    grid-template-columns: 1fr;
+  }
+  .detail-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .detail-title {
+    font-size: 24px;
+    flex-wrap: wrap;
+  }
+  /* modal fills the screen bottom-sheet style */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+  .modal {
+    padding: 20px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .modal-actions .btn {
+    flex: 1 1 auto;
+  }
+  .preset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
+  .stats {
+    gap: 8px;
+  }
+  .login-card {
+    padding: 26px 22px;
+  }
 }

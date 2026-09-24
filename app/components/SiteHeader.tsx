@@ -28,7 +28,10 @@ export default function SiteHeader({ authenticated, onLogout }: Props) {
           >
             ◐ 主题
           </button>
-          {authenticated ? (
+          {/* Admin entry is intentionally hidden from public pages — reach the
+              console via the (optionally env-configured) admin path directly.
+              Only an already-authenticated session sees the 后台/退出 buttons. */}
+          {authenticated && (
             <>
               <Link href="/admin" className="icon-btn">
                 ⚙ 后台
@@ -39,10 +42,6 @@ export default function SiteHeader({ authenticated, onLogout }: Props) {
                 </button>
               )}
             </>
-          ) : (
-            <Link href="/admin" className="icon-btn">
-              管理登录
-            </Link>
           )}
         </div>
       </div>

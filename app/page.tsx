@@ -6,7 +6,7 @@ import SiteHeader from "./components/SiteHeader";
 import Select from "./components/Select";
 import ProviderAvatar from "./components/ProviderAvatar";
 import { TypeBadge, StatusDot } from "./components/badges";
-import { hostOf, categoryOf } from "./lib/display";
+import { hostOf, categoryOf, distinctModelCount } from "./lib/display";
 import { fetchAuthStatus } from "./lib/api";
 import { ProviderView } from "@/lib";
 
@@ -55,7 +55,7 @@ export default function Home() {
     return list;
   }, [providers, query, catFilter, sort]);
 
-  const totalModels = providers.reduce((s, p) => s + p.model_count, 0);
+  const totalModels = distinctModelCount(providers.map((p) => p.models));
 
   return (
     <>

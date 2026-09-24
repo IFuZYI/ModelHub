@@ -35,6 +35,8 @@ export function statusLabel(status: FetchStatus): string {
       return "正常";
     case "error":
       return "刷新失败";
+    case "needs_key":
+      return "待配置密钥";
     default:
       return "待刷新";
   }
@@ -56,6 +58,123 @@ export function providerGlyph(
 /** Whether an icon value is an image URL (favicon) rather than an emoji/glyph. */
 export function isIconUrl(icon: string | null | undefined): boolean {
   return !!icon && /^https?:\/\//i.test(icon.trim());
+}
+
+/**
+ * Normalize a model id for cross-provider dedup counting. Strips a leading
+ * `provider/` (or vendor path) prefix that aggregators prepend — e.g.
+ * "openai/gpt-4o" and "gpt-4o" count as the same model — and lowercases.
+ * Only the last path segment is kept, so "meta-llama/Llama-3.3-70B" →
+ * "llama-3.3-70b".
+ */
+export function modelDedupeKey(model: string): string {
+  const trimmed = model.trim();
+  const lastSeg = trimmed.includes("/")
+    ? trimmed.slice(trimmed.lastIndexOf("/") + 1)
+    : trimmed;
+  return lastSeg.toLowerCase();
+}
+
+/** Count distinct models across providers, deduped by modelDedupeKey. */
+export function distinctModelCount(providerModels: string[][]): number {
+  const set = new Set<string>();
+  for (const models of providerModels) {
+    for (const m of models) {
+      const key = modelDedupeKey(m);
+      if (key) set.add(key);
+    }
+  }
+  return set.size;
+}
+
+/**
+ * Vendor group for a model id, used to categorize the model list (newapi
+ * style). Uses the `vendor/` prefix when present (e.g. "openai/gpt-4o" →
+ * "openai"); otherwise infers from a leading token before the first "-" for
+ * common bare names (gpt-* → openai, claude-* → anthropic, ...). Falls back
+ * to "其他".
+ */
+export function modelVendor(model: string): string {
+  const m = model.trim();
+  if (m.includes("/")) {
+    const prefix = m.slice(0, m.indexOf("/")).toLowerCase();
+    return prefix || "其他";
+  }
+  const lower = m.toLowerCase();
+  const rules: [RegExp, string][] = [
+    [/^(gpt|o[134]|chatgpt|text-|dall-e|whisper|tts|davinci)/, "openai"],
+    [/^claude/, "anthropic"],
+    [/^gemini|^gemma/, "google"],
+    [/^grok/, "xai"],
+    [/^(deepseek)/, "deepseek"],
+    [/^(qwen|qwq|tongyi|通义)/, "qwen"],
+    [/^(glm|chatglm|cogview|cogvideo)/, "zhipu"],
+    [/^(moonshot|kimi)/, "moonshot"],
+    [
+      /^(mistral|codestral|mixtral|magistral|ministral|devstral|pixtral)/,
+      "mistral",
+    ],
+    [/^(llama|meta-llama|codellama)/, "meta"],
+    [/^(command|c4ai|cohere|rerank|embed-)/, "cohere"],
+    [/^(minimax|abab)/, "minimax"],
+    [/^(doubao|豆包)/, "doubao"],
+    [/^(ernie|文心)/, "baidu"],
+    [/^(hunyuan|混元)/, "tencent"],
+    [/^(step|阶跃)/, "stepfun"],
+    [/^(spark|星火|generalv|4\.0ultra)/, "spark"],
+    [/^(baichuan|百川)/, "baichuan"],
+    [/^(sonar|perplexity)/, "perplexity"],
+    [/^(nova)/, "amazon"],
+    [/^(yi-|yi_|零一)/, "lingyiwanwu"],
+    [/^(360|zhinao|360gpt|360智脑)/, "360"],
+    [/^jina/, "jina"],
+    [/^vidu/, "vidu"],
+    [/^(jimeng|即梦|seedream|seededit|seedance)/, "jimeng"],
+    [/^(kling|kwai|可灵|快手)/, "kuaishou"],
+    [/^@cf\//, "cloudflare"],
+  ];
+  for (const [re, vendor] of rules) if (re.test(lower)) return vendor;
+  return "其他";
+}
+
+/** Human label for a vendor key (from modelVendor). */
+export function vendorLabel(vendor: string): string {
+  const map: Record<string, string> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    google: "Google",
+    "google-vertex": "Google",
+    xai: "xAI",
+    deepseek: "DeepSeek",
+    qwen: "通义千问",
+    qwen3: "通义千问",
+    zhipu: "智谱 GLM",
+    moonshot: "月之暗面",
+    mistral: "Mistral",
+    mistralai: "Mistral",
+    "meta-llama": "Meta Llama",
+    meta: "Meta Llama",
+    cohere: "Cohere",
+    minimax: "MiniMax",
+    doubao: "豆包",
+    baidu: "百度文心",
+    tencent: "腾讯混元",
+    stepfun: "阶跃星辰",
+    spark: "讯飞星火",
+    baichuan: "百川",
+    perplexity: "Perplexity",
+    amazon: "Amazon",
+    "deepseek-ai": "DeepSeek",
+    lingyiwanwu: "零一万物",
+    "360": "360 智脑",
+    jina: "Jina AI",
+    vidu: "Vidu",
+    jimeng: "即梦",
+    kuaishou: "快手可灵",
+    cloudflare: "Cloudflare",
+    其他: "其他",
+  };
+  return map[vendor] ?? vendor;
 }
 
 /** Host portion of a base_url, falling back to the raw string if unparseable. */

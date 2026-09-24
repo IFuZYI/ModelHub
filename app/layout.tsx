@@ -1,5 +1,5 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
 const inter = Inter({
@@ -19,6 +19,12 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "ModelHub · 模型导航",
   description: "浏览各 API 提供商可用的模型清单",
+};
+
+// Enable proper mobile scaling for the responsive layout.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

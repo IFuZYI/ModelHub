@@ -21,7 +21,7 @@ import type { EncryptedValue } from "../infra/crypto";
  */
 export type ProviderType = "native" | "proxy" | "newapi" | "custom";
 export type ProviderCategory = "official" | "other";
-export type FetchStatus = "ok" | "error" | "pending";
+export type FetchStatus = "ok" | "error" | "pending" | "needs_key";
 
 /** Map a leaf type to its top-level category. */
 export function categoryOf(type: ProviderType): ProviderCategory {
@@ -98,7 +98,9 @@ export const modelCacheSchema = z.object({
   models: z.array(z.string()).default([]),
   count: z.number().int().nonnegative().default(0),
   last_fetched: z.string().nullable().default(null),
-  last_status: z.enum(["ok", "error", "pending"]).default("pending"),
+  last_status: z
+    .enum(["ok", "error", "pending", "needs_key"])
+    .default("pending"),
   last_error: z.string().nullable().default(null),
   // When this cache file was last written (i.e. the model list's update date).
   updated_at: z.string().nullable().default(null),
@@ -135,7 +137,7 @@ export const legacyStoredProviderSchema = z.object({
   register_methods: z.array(z.string()).default([]),
   models: z.array(z.string()),
   last_fetched: z.string().nullable(),
-  last_status: z.enum(["ok", "error", "pending"]),
+  last_status: z.enum(["ok", "error", "pending", "needs_key"]),
   last_error: z.string().nullable(),
 });
 

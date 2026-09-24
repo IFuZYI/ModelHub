@@ -7,6 +7,7 @@ import Select from "../components/Select";
 import { TypeBadge, StatusDot } from "../components/badges";
 import ProviderAvatar from "../components/ProviderAvatar";
 import { fetchAuthStatus, importNewapiSite } from "../lib/api";
+import { typeLabel } from "../lib/display";
 import { ProviderView, ProviderType } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
 import type { OfficialPreset } from "@/lib/domain/presets";
@@ -284,6 +285,108 @@ export default function AdminPage() {
     await loadProviders();
   }
 
+  // ---- grouped admin listing: 官方(原生/中转) / 其他(NewAPI/自建) ----
+  function ProviderCard({ p }: { p: ProviderView }) {
+    return (
+      <div className="site-card" style={{ cursor: "default" }}>
+        <div className="card-top">
+          <ProviderAvatar name={p.name} icon={p.icon} />
+          <div className="card-identity">
+            <p className="card-title">{p.name}</p>
+            <div className="card-domain">{p.base_url}</div>
+          </div>
+        </div>
+        <div className="card-bottom">
+          <TypeBadge type={p.type} />
+          <span className="card-tag">{p.model_count} 模型</span>
+          <StatusDot status={p.last_status} />
+        </div>
+        {p.last_error && (
+          <div className="error-box" style={{ marginBottom: 0 }}>
+            {p.last_error}
+          </div>
+        )}
+        <div className="admin-bar" style={{ marginBottom: 0 }}>
+          <button className="icon-btn" onClick={() => refresh(p.id)}>
+            刷新
+          </button>
+          <button className="icon-btn" onClick={() => openEdit(p)}>
+            编辑
+          </button>
+          <button
+            className="icon-btn"
+            style={{ color: "var(--err)" }}
+            onClick={() => remove(p.id)}
+          >
+            删除
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderGroupedProviders() {
+    // Sub-group definitions: 官方 → 原生/中转, 其他 → NewAPI/自建.
+    const groups: {
+      category: string;
+      subs: { type: ProviderType; items: ProviderView[] }[];
+    }[] = [
+      {
+        category: "官方",
+        subs: [
+          { type: "native", items: [] },
+          { type: "proxy", items: [] },
+        ],
+      },
+      {
+        category: "其他",
+        subs: [
+          { type: "newapi", items: [] },
+          { type: "custom", items: [] },
+        ],
+      },
+    ];
+    for (const p of providers) {
+      for (const g of groups) {
+        const sub = g.subs.find((s) => s.type === p.type);
+        if (sub) sub.items.push(p);
+      }
+    }
+    return (
+      <div className="admin-groups">
+        {groups.map((g) => {
+          const total = g.subs.reduce((n, s) => n + s.items.length, 0);
+          if (total === 0) return null;
+          return (
+            <section key={g.category} className="admin-group">
+              <h2 className="admin-group-title">
+                {g.category}
+                <span className="admin-group-count">{total}</span>
+              </h2>
+              {g.subs.map((s) =>
+                s.items.length === 0 ? null : (
+                  <div key={s.type} className="admin-subgroup">
+                    <div className="admin-subgroup-label">
+                      {typeLabel(s.type)}
+                      <span className="admin-subgroup-count">
+                        {s.items.length}
+                      </span>
+                    </div>
+                    <div className="card-grid">
+                      {s.items.map((p) => (
+                        <ProviderCard key={p.id} p={p} />
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
   if (!ready)
     return (
       <>
@@ -362,48 +465,7 @@ export default function AdminPage() {
         {providers.length === 0 ? (
           <div className="empty">还没有提供商，点击右上角添加。</div>
         ) : (
-          <div className="card-grid">
-            {providers.map((p) => (
-              <div
-                key={p.id}
-                className="site-card"
-                style={{ cursor: "default" }}
-              >
-                <div className="card-top">
-                  <ProviderAvatar name={p.name} icon={p.icon} />
-                  <div className="card-identity">
-                    <p className="card-title">{p.name}</p>
-                    <div className="card-domain">{p.base_url}</div>
-                  </div>
-                </div>
-                <div className="card-bottom">
-                  <TypeBadge type={p.type} />
-                  <span className="card-tag">{p.model_count} 模型</span>
-                  <StatusDot status={p.last_status} />
-                </div>
-                {p.last_error && (
-                  <div className="error-box" style={{ marginBottom: 0 }}>
-                    {p.last_error}
-                  </div>
-                )}
-                <div className="admin-bar" style={{ marginBottom: 0 }}>
-                  <button className="icon-btn" onClick={() => refresh(p.id)}>
-                    刷新
-                  </button>
-                  <button className="icon-btn" onClick={() => openEdit(p)}>
-                    编辑
-                  </button>
-                  <button
-                    className="icon-btn"
-                    style={{ color: "var(--err)" }}
-                    onClick={() => remove(p.id)}
-                  >
-                    删除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          renderGroupedProviders()
         )}
       </main>
 
@@ -456,7 +518,7 @@ export default function AdminPage() {
                 <h2>选择官方提供商</h2>
                 <div className="preset-scroll">
                   {/* 原生: grouped by region */}
-                  {(["国际", "中国"] as const).map((region) => {
+                  {(["国际", "中国", "企业"] as const).map((region) => {
                     const items = OFFICIAL_PRESETS.filter(
                       (p) => p.type === "native" && p.region === region
                     );
