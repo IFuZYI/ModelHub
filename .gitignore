@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+data.json
+data.json.migrated
+data/
+.env
+.env.local
+*.log
+# build + test artifacts
+tsconfig.tsbuildinfo
+dogfood-output/

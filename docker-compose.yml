@@ -1,0 +1,18 @@
+services:
+  modelhub:
+    build: .
+    ports:
+      # bind to loopback only — private tool, do not expose publicly
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MODELHUB_MASTER_KEY=${MODELHUB_MASTER_KEY:?set MODELHUB_MASTER_KEY}
+      - MODELHUB_ADMIN_PASSWORD=${MODELHUB_ADMIN_PASSWORD:?set MODELHUB_ADMIN_PASSWORD}
+      - MODELHUB_DATA_PATH=/data
+      - LOG_LEVEL=info
+    volumes:
+      - modelhub-data:/data
+    restart: unless-stopped
+
+volumes:
+  modelhub-data:
