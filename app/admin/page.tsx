@@ -25,6 +25,14 @@ interface FormState {
   models: string[];
   /** True for presets whose models are manual (no live listing). */
   manual_models: boolean;
+  /** Official website URL shown as the "前往官网" link. */
+  site_url: string;
+  /** models.dev catalog slug for the models-dev adapter (empty = unused). */
+  models_dev_slug: string;
+  /** LLMRates dataset provider slug for the llmrates adapter (empty = unused). */
+  llmrates_slug: string;
+  /** Upstream adapter id (empty = server default openai-compatible). */
+  adapter: string;
   /** Sign-up / login methods (NewAPI sites). */
   register_methods: string[];
 }
@@ -38,6 +46,10 @@ const EMPTY_FORM: FormState = {
   icon: "",
   models: [],
   manual_models: false,
+  site_url: "",
+  models_dev_slug: "",
+  llmrates_slug: "",
+  adapter: "",
   register_methods: [],
 };
 
@@ -76,7 +88,7 @@ export default function AdminPage() {
   const [presetNote, setPresetNote] = useState<string | null>(null);
 
   const loadProviders = useCallback(async () => {
-    const res = await fetch("/api/providers");
+    const res = await fetch("/api/providers?includeModels=1");
     const json = await res.json();
     setProviders(json.providers ?? []);
   }, []);
@@ -147,6 +159,10 @@ export default function AdminPage() {
       icon: p.icon ?? "",
       models: p.models,
       manual_models: p.manual_models,
+      site_url: p.site_url ?? "",
+      models_dev_slug: p.models_dev_slug ?? "",
+      llmrates_slug: p.llmrates_slug ?? "",
+      adapter: p.adapter ?? "",
       register_methods: p.register_methods ?? [],
     });
     setFlow("form");
@@ -174,6 +190,10 @@ export default function AdminPage() {
         icon: r.icon ?? "",
         models: [],
         manual_models: false,
+        site_url: "",
+        models_dev_slug: "",
+        llmrates_slug: "",
+        adapter: "",
         register_methods: r.register_methods ?? [],
       });
       if (!r.reachable) {
@@ -203,6 +223,14 @@ export default function AdminPage() {
       icon: faviconUrl(preset.domain),
       models: preset.models,
       manual_models: preset.manual_models ?? false,
+      site_url: preset.site_url ?? "",
+      models_dev_slug: preset.models_dev_slug ?? "",
+      llmrates_slug: preset.llmrates_slug ?? "",
+      // Catalog slugs are FALLBACKS, not the primary source: keep the live
+      // adapter (openai-compatible, unless the preset forces one) so a keyed
+      // fetch uses the real API, and the fetcher falls back to models.dev /
+      // LLMRates only when the live listing fails or there's no key.
+      adapter: preset.adapter ?? "",
       register_methods: [],
     });
     setPresetNote(preset.note ?? null);
@@ -239,8 +267,25 @@ export default function AdminPage() {
         // always send aff_code so clearing it on edit works ("" clears)
         aff_code: form.aff_code.trim(),
       };
-      // On create key is required; on edit only send if provided.
+      // On edit, omit an unchanged key; an explicit clear is a separate action.
       if (!isEdit || form.key) body.key = form.key;
+      // site_url: official website link. On edit always send so clearing works.
+      if (!isEdit) {
+        if (form.site_url.trim()) body.site_url = form.site_url.trim();
+      } else {
+        body.site_url = form.site_url.trim();
+      }
+      // Adapter + models.dev/LLMRates slug: carry them so a catalog-backed
+      // provider syncs from the chosen source. On edit, always send so clearing
+      // works.
+      if (form.adapter) body.adapter = form.adapter;
+      if (!isEdit) {
+        if (form.models_dev_slug) body.models_dev_slug = form.models_dev_slug;
+        if (form.llmrates_slug) body.llmrates_slug = form.llmrates_slug;
+      } else {
+        body.models_dev_slug = form.models_dev_slug.trim();
+        body.llmrates_slug = form.llmrates_slug.trim();
+      }
       // On create, carry the preset's built-in model list + manual flag.
       // For custom/newapi providers the user may edit the model list too.
       if (!isEdit) {
@@ -795,6 +840,17 @@ export default function AdminPage() {
                       required
                     />
                   </div>
+                  {/* 官网地址：用户点「前往官网」跳转的落地页，与 API 地址区分。 */}
+                  <div className="field">
+                    <label>官网地址（可选，用户点“前往官网”跳转，留空则用 Base URL）</label>
+                    <input
+                      value={form.site_url}
+                      onChange={(e) =>
+                        setForm({ ...form, site_url: e.target.value })
+                      }
+                      placeholder="https://openai.com"
+                    />
+                  </div>
                   {form.type === "newapi" && (
                     <div className="field">
                       <label>邀请码 aff（可选，NewAPI 站点用）</label>
@@ -847,6 +903,36 @@ export default function AdminPage() {
                         setForm({ ...form, key: e.target.value })
                       }
                       placeholder="sk-...（可留空）"
+                    />
+                  </div>
+                  {/* models.dev 目录同步：填写 slug 后用 models-dev 适配器
+                      从公共目录抓取模型列表，无需 API Key。 */}
+                  <div className="field">
+                    <label>
+                      models.dev 目录 slug（可选，填写后从 models.dev 同步模型，无需
+                      Key）
+                    </label>
+                    <input
+                      value={form.models_dev_slug}
+                      onChange={(e) =>
+                        setForm({ ...form, models_dev_slug: e.target.value })
+                      }
+                      placeholder="如 openai、anthropic、google、openrouter"
+                    />
+                  </div>
+                  {/* LLMRates 数据集同步：models.dev 缺失的厂商（如
+                      SambaNova、Perplexity）可用它，无需 API Key。 */}
+                  <div className="field">
+                    <label>
+                      LLMRates 数据集 slug（可选，models.dev
+                      缺的厂商用它同步模型，无需 Key）
+                    </label>
+                    <input
+                      value={form.llmrates_slug}
+                      onChange={(e) =>
+                        setForm({ ...form, llmrates_slug: e.target.value })
+                      }
+                      placeholder="如 sambanova、perplexity、volcano-ark"
                     />
                   </div>
                   {formErr && <div className="error-box">{formErr}</div>}

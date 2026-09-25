@@ -29,4 +29,33 @@ describe("buildInviteUrl", () => {
       "http://127.0.0.1:3000?aff=K"
     );
   });
+
+  it("prefers an explicit site_url over the base_url origin", () => {
+    // Official platforms link to their website, not the API endpoint.
+    expect(
+      buildInviteUrl("https://api.openai.com", null, "https://openai.com")
+    ).toBe("https://openai.com");
+  });
+
+  it("keeps a deep site_url path (e.g. a product page)", () => {
+    expect(
+      buildInviteUrl(
+        "https://ark.cn-beijing.volces.com/api/v3",
+        null,
+        "https://www.volcengine.com/product/ark"
+      )
+    ).toBe("https://www.volcengine.com/product/ark");
+  });
+
+  it("falls back to base_url origin when site_url is empty", () => {
+    expect(buildInviteUrl("https://api.example.com/v1", null, "")).toBe(
+      "https://api.example.com"
+    );
+  });
+
+  it("appends aff to the site_url when both are set", () => {
+    expect(
+      buildInviteUrl("https://relay.example.com", "ABC", "https://brand.com")
+    ).toBe("https://brand.com?aff=ABC");
+  });
 });

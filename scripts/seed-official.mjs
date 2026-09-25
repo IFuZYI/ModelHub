@@ -8,6 +8,9 @@ const favicon = (domain) =>
   `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
 // Mirror of lib/domain/presets.ts (inline so this script needs no TS build).
+// `slug` is the models.dev api.json key; `llmratesSlug` is the LLMRates
+// dataset provider slug. A preset with either creates a provider on the
+// matching catalog adapter so its model list syncs without an API key.
 const PRESETS = [
   // 官方 · 国际
   {
@@ -15,48 +18,52 @@ const PRESETS = [
     type: "native",
     domain: "openai.com",
     base_url: "https://api.openai.com",
-    models: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o3", "o4-mini"],
+    site_url: "https://openai.com",
+    slug: "openai",
+    models: ["gpt-5.6", "gpt-5.5", "gpt-5.4", "o3", "o4-mini", "gpt-4o"],
   },
   {
     name: "Anthropic",
     type: "native",
-    domain: "anthropic.com",
+    domain: "claude.com",
     base_url: "https://api.anthropic.com",
+    site_url: "https://www.anthropic.com",
+    slug: "anthropic",
     models: [
-      "claude-opus-4",
-      "claude-sonnet-4",
-      "claude-3-5-sonnet-latest",
-      "claude-3-5-haiku-latest",
+      "claude-opus-4-8",
+      "claude-opus-5",
+      "claude-sonnet-5",
+      "claude-haiku-4-5",
     ],
-    manual_models: true,
   },
   {
     name: "Google Gemini",
     type: "native",
     domain: "ai.google.dev",
     base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
-    models: [
-      "gemini-2.5-pro",
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-    ],
-    manual_models: true,
+    site_url: "https://gemini.google.com",
+    slug: "google",
+    models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
   },
   {
     name: "DeepSeek 深度求索",
     type: "native",
     domain: "deepseek.com",
     base_url: "https://api.deepseek.com",
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    site_url: "https://www.deepseek.com",
+    slug: "deepseek",
+    models: ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"],
   },
   {
     name: "Mistral AI",
     type: "native",
     domain: "mistral.ai",
     base_url: "https://api.mistral.ai",
+    site_url: "https://mistral.ai",
+    slug: "mistral",
     models: [
       "mistral-large-latest",
+      "mistral-medium-latest",
       "mistral-small-latest",
       "codestral-latest",
     ],
@@ -66,27 +73,28 @@ const PRESETS = [
     type: "native",
     domain: "x.ai",
     base_url: "https://api.x.ai",
-    models: ["grok-4", "grok-3", "grok-3-mini", "grok-2-vision"],
+    site_url: "https://x.ai",
+    slug: "xai",
+    models: ["grok-4.7", "grok-4.6", "grok-4.5", "grok-4.3"],
   },
   {
     name: "Groq",
     type: "native",
     domain: "groq.com",
     base_url: "https://api.groq.com/openai",
-    models: [
-      "llama-3.3-70b-versatile",
-      "openai/gpt-oss-120b",
-      "openai/gpt-oss-20b",
-    ],
+    site_url: "https://groq.com",
+    slug: "groq",
+    models: ["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "groq/compound"],
   },
   {
     name: "NVIDIA NIM",
     type: "native",
     domain: "nvidia.com",
     base_url: "https://integrate.api.nvidia.com",
+    site_url: "https://build.nvidia.com",
+    slug: "nvidia",
     models: [
-      "meta/llama-3.3-70b-instruct",
-      "deepseek-ai/deepseek-r1",
+      "deepseek-ai/deepseek-v4-pro",
       "qwen/qwen2.5-coder-32b-instruct",
     ],
   },
@@ -95,7 +103,23 @@ const PRESETS = [
     type: "native",
     domain: "cerebras.ai",
     base_url: "https://api.cerebras.ai",
-    models: ["llama-3.3-70b", "llama3.1-8b", "qwen-3-32b"],
+    site_url: "https://cerebras.ai",
+    slug: "cerebras",
+    models: ["gpt-oss-120b", "qwen-3.8-27b"],
+  },
+  {
+    name: "SambaNova",
+    type: "native",
+    domain: "sambanova.ai",
+    base_url: "https://api.sambanova.ai",
+    site_url: "https://sambanova.ai",
+    llmratesSlug: "sambanova",
+    models: [
+      "meta-llama-3-3-70b-instruct",
+      "deepseek-v3-2",
+      "gpt-oss-120b",
+      "minimax-m3",
+    ],
   },
   // 官方 · 国内
   {
@@ -103,46 +127,56 @@ const PRESETS = [
     type: "native",
     domain: "aliyun.com",
     base_url: "https://dashscope.aliyuncs.com/compatible-mode",
-    models: ["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long"],
+    site_url: "https://www.aliyun.com/product/bailian",
+    slug: "alibaba",
+    models: ["qwen-max", "qwen-plus", "qwen-flash"],
   },
   {
     name: "字节火山方舟",
     type: "native",
     domain: "volcengine.com",
     base_url: "https://ark.cn-beijing.volces.com/api/v3",
-    models: ["doubao-pro-32k", "doubao-lite-32k", "deepseek-v3"],
+    site_url: "https://www.volcengine.com/product/ark",
+    slug: "volcengine",
+    models: [
+      "doubao-seed-2-0-pro-260215",
+      "doubao-seed-1-8-251228",
+      "deepseek-v4-pro-ga-260813",
+    ],
   },
   {
     name: "MiniMax",
     type: "native",
     domain: "minimaxi.com",
     base_url: "https://api.minimaxi.com",
-    models: ["MiniMax-M2", "abab6.5s-chat"],
+    site_url: "https://www.minimaxi.com",
+    slug: "minimax",
+    models: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2"],
   },
   {
     name: "智谱 AI（GLM）",
     type: "native",
     domain: "bigmodel.cn",
     base_url: "https://open.bigmodel.cn/api/paas/v4",
-    models: ["glm-4-plus", "glm-4-air", "glm-4-flash", "glm-4v"],
+    site_url: "https://www.zhipuai.cn",
+    slug: "zhipuai",
+    models: ["glm-4.7", "glm-4.6", "glm-4.5", "glm-4.5-air"],
   },
   {
     name: "月之暗面 Kimi",
     type: "native",
     domain: "moonshot.cn",
     base_url: "https://api.moonshot.cn",
-    models: [
-      "moonshot-v1-8k",
-      "moonshot-v1-32k",
-      "moonshot-v1-128k",
-      "kimi-k2",
-    ],
+    site_url: "https://www.moonshot.cn",
+    slug: "moonshotai",
+    models: ["kimi-k3", "kimi-k2.6", "kimi-k2.7-code"],
   },
   {
     name: "百度千帆（文心）",
     type: "native",
     domain: "baidu.com",
     base_url: "https://qianfan.baidubce.com/v2",
+    site_url: "https://cloud.baidu.com/product/wenxinworkshop",
     models: ["ernie-4.0-8k", "ernie-3.5-8k"],
   },
   // 官方 · 中转（聚合路由）
@@ -151,9 +185,11 @@ const PRESETS = [
     type: "proxy",
     domain: "openrouter.ai",
     base_url: "https://openrouter.ai/api",
+    site_url: "https://openrouter.ai",
+    slug: "openrouter",
     models: [
       "openai/gpt-4o",
-      "anthropic/claude-sonnet-4",
+      "anthropic/claude-opus-4.8",
       "google/gemini-2.5-pro",
     ],
   },
@@ -162,13 +198,20 @@ const PRESETS = [
     type: "proxy",
     domain: "vercel.com",
     base_url: "https://ai-gateway.vercel.sh",
-    models: ["openai/gpt-4o", "anthropic/claude-sonnet-4"],
+    site_url: "https://vercel.com/ai-gateway",
+    slug: "vercel",
+    models: [
+      "openai/gpt-4o",
+      "anthropic/claude-opus-4.8",
+      "google/gemini-2.5-pro",
+    ],
   },
   {
     name: "Portkey",
     type: "proxy",
     domain: "portkey.ai",
     base_url: "https://api.portkey.ai",
+    site_url: "https://portkey.ai",
     models: ["gpt-4o", "claude-sonnet-4"],
     manual_models: true,
   },
@@ -177,14 +220,18 @@ const PRESETS = [
     type: "proxy",
     domain: "requesty.ai",
     base_url: "https://router.requesty.ai",
-    models: ["openai/gpt-4o", "anthropic/claude-sonnet-4"],
+    site_url: "https://requesty.ai",
+    slug: "requesty",
+    models: ["claude-opus-4-6", "gemini-2.5-pro@eu"],
   },
   {
     name: "FastRouter",
     type: "proxy",
     domain: "fastrouter.ai",
     base_url: "https://go.fastrouter.ai/api/v1",
-    models: ["openai/gpt-4o", "anthropic/claude-sonnet-4"],
+    site_url: "https://fastrouter.ai",
+    slug: "fastrouter",
+    models: ["anthropic/claude-opus-4.8", "google/gemini-2.5-pro"],
   },
 ];
 
@@ -218,11 +265,18 @@ async function main() {
     const cur = existing.get(p.name);
     const icon = favicon(p.domain);
     if (cur) {
-      // Update icon + type on an existing provider; don't resend models.
+      // Update icon + type + models.dev sync on an existing provider.
       const res = await fetch(`${BASE}/api/providers/${cur.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Cookie: cookie },
-        body: JSON.stringify({ icon, type: p.type }),
+        body: JSON.stringify({
+          icon,
+          type: p.type,
+          ...(p.site_url ? { site_url: p.site_url } : {}),
+          // Slugs are no-key FALLBACKS; keep the live adapter as primary.
+          ...(p.slug ? { models_dev_slug: p.slug } : {}),
+          ...(p.llmratesSlug ? { llmrates_slug: p.llmratesSlug } : {}),
+        }),
       });
       if (res.ok) {
         console.log(`upd   ${p.name} [${p.type}]`);
@@ -242,6 +296,10 @@ async function main() {
         base_url: p.base_url,
         icon,
         models: p.models,
+        ...(p.site_url ? { site_url: p.site_url } : {}),
+        // Slugs are no-key FALLBACKS; keep the live adapter as primary.
+        ...(p.slug ? { models_dev_slug: p.slug } : {}),
+        ...(p.llmratesSlug ? { llmrates_slug: p.llmratesSlug } : {}),
         ...(p.manual_models ? { manual_models: true } : {}),
       }),
     });
