@@ -4,7 +4,10 @@ import {
   distinctModelCount,
   modelVendor,
   vendorLabel,
+  normalizeVendorKey,
 } from "../app/lib/display";
+import { toPublicView } from "@/lib/domain/provider";
+import type { StoredProvider } from "@/lib/domain/provider";
 
 describe("modelDedupeKey", () => {
   it("strips a provider/ prefix and lowercases", () => {
@@ -60,8 +63,20 @@ describe("distinctModelCount", () => {
 describe("modelVendor", () => {
   it("uses the vendor/ prefix when present", () => {
     expect(modelVendor("openai/gpt-4o")).toBe("openai");
-    expect(modelVendor("meta-llama/Llama-3.3-70B")).toBe("meta-llama");
+    expect(modelVendor("meta-llama/Llama-3.3-70B")).toBe("meta");
     expect(modelVendor("anthropic/claude-sonnet-4")).toBe("anthropic");
+  });
+
+  it("normalizes noisy aggregator vendor prefixes to a canonical key", () => {
+    expect(modelVendor("~openai/gpt-4o")).toBe("openai");
+    expect(modelVendor("~anthropic/claude-3")).toBe("anthropic");
+    expect(modelVendor("z-ai/glm-4.6")).toBe("zhipu");
+    expect(modelVendor("~z-ai/glm-4.6")).toBe("zhipu");
+    expect(modelVendor("x-ai/grok-4")).toBe("xai");
+    expect(modelVendor("mistralai/Mistral-7B")).toBe("mistral");
+    expect(modelVendor("deepseek-ai/DeepSeek-V3")).toBe("deepseek");
+    expect(modelVendor("moonshotai/Kimi-K2")).toBe("moonshot");
+    expect(modelVendor("~google/gemini-2.5-pro")).toBe("google");
   });
 
   it("infers vendor from bare model names", () => {
@@ -82,6 +97,38 @@ describe("modelVendor", () => {
   });
 });
 
+describe("toPublicView", () => {
+  const provider: StoredProvider = {
+    id: "11111111-1111-1111-1111-111111111111",
+    name: "Example",
+    type: "native",
+    base_url: "https://example.com",
+    aff_code: null,
+    adapter: "openai-compatible",
+    site_url: null,
+    models_dev_slug: null,
+    llmrates_slug: null,
+    key_enc: null,
+    manual_models: false,
+    icon: null,
+    register_methods: [],
+    models: ["gpt-4o"],
+    last_fetched: "2026-09-25T06:01:27.000Z",
+    last_status: "needs_key",
+    last_error: "pricing: HTTP 401 Unauthorized: secret upstream detail",
+    updated_at: "2026-09-25T01:49:14.000Z",
+  };
+
+  it("omits operational diagnostics and credentials from public views", () => {
+    const view = toPublicView(provider);
+    expect(view).not.toHaveProperty("last_error");
+    expect(view).not.toHaveProperty("last_status");
+    expect(view).not.toHaveProperty("last_fetched");
+    expect(view).not.toHaveProperty("updated_at");
+    expect(view).not.toHaveProperty("has_key");
+  });
+});
+
 describe("vendorLabel", () => {
   it("maps known vendor keys to human labels", () => {
     expect(vendorLabel("openai")).toBe("OpenAI");
@@ -91,5 +138,16 @@ describe("vendorLabel", () => {
 
   it("passes through unknown keys unchanged", () => {
     expect(vendorLabel("acme")).toBe("acme");
+  });
+});
+
+describe("normalizeVendorKey", () => {
+  it("strips ~ routing markers and collapses synonyms", () => {
+    expect(normalizeVendorKey("~openai")).toBe("openai");
+    expect(normalizeVendorKey("z-ai")).toBe("zhipu");
+    expect(normalizeVendorKey("x-ai")).toBe("xai");
+    expect(normalizeVendorKey("meta-llama")).toBe("meta");
+    expect(normalizeVendorKey("mistralai")).toBe("mistral");
+    expect(normalizeVendorKey("openai")).toBe("openai");
   });
 });

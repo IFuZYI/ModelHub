@@ -88,6 +88,52 @@ export function distinctModelCount(providerModels: string[][]): number {
 }
 
 /**
+ * Canonicalize a raw `vendor/` prefix from an aggregator id into a stable
+ * vendor key. Aggregators (e.g. OpenRouter) emit noisy variants of the same
+ * vendor: a leading `~` (fallback/free routing), a provider suffix like
+ * `-ai` / `mistralai`, or vendor synonyms (`z-ai` == `zhipu`). Collapsing
+ * them here keeps the category counts from splitting one vendor into several.
+ */
+export function normalizeVendorKey(raw: string): string {
+  let key = raw.trim().toLowerCase();
+  if (!key) return key;
+  // Strip aggregator routing markers/prefixes.
+  key = key.replace(/^~+/, "").replace(/^@/, "");
+  const aliases: Record<string, string> = {
+    "openai-chat": "openai",
+    anthropic: "anthropic",
+    "google-vertex": "google",
+    "google-ai-studio": "google",
+    googleai: "google",
+    "x-ai": "xai",
+    "xai-org": "xai",
+    "deepseek-ai": "deepseek",
+    "deepseek-v3": "deepseek",
+    qwen3: "qwen",
+    tongyi: "qwen",
+    alibaba: "qwen",
+    "z-ai": "zhipu",
+    zai: "zhipu",
+    zhipuai: "zhipu",
+    "moonshot-ai": "moonshot",
+    moonshotai: "moonshot",
+    "meta-llama": "meta",
+    metaai: "meta",
+    "meta-ai": "meta",
+    mistralai: "mistral",
+    "cohere-ai": "cohere",
+    "minimax-ai": "minimax",
+    "bytedance-seed": "bytedance",
+    "step-ai": "stepfun",
+    阶跃星辰: "stepfun",
+    通义千问: "qwen",
+    腾讯混元: "tencent",
+    百度文心: "baidu",
+  };
+  return aliases[key] ?? key;
+}
+
+/**
  * Vendor group for a model id, used to categorize the model list (newapi
  * style). Uses the `vendor/` prefix when present (e.g. "openai/gpt-4o" →
  * "openai"); otherwise infers from a leading token before the first "-" for
@@ -98,7 +144,7 @@ export function modelVendor(model: string): string {
   const m = model.trim();
   if (m.includes("/")) {
     const prefix = m.slice(0, m.indexOf("/")).toLowerCase();
-    return prefix || "其他";
+    return normalizeVendorKey(prefix) || "其他";
   }
   const lower = m.toLowerCase();
   const rules: [RegExp, string][] = [
@@ -172,6 +218,7 @@ export function vendorLabel(vendor: string): string {
     jimeng: "即梦",
     kuaishou: "快手可灵",
     cloudflare: "Cloudflare",
+    bytedance: "字节跳动",
     其他: "其他",
   };
   return map[vendor] ?? vendor;
