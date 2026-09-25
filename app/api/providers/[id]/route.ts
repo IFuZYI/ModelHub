@@ -15,7 +15,7 @@ type Ctx = { params: Promise<{ id: string }> };
 // Public detail (models only, no key).
 export const GET = withErrorHandling(async (_req: Request, ctx: Ctx) => {
   const { id } = await ctx.params;
-  return NextResponse.json(await providerService.getView(id));
+  return NextResponse.json(await providerService.getPublicView(id));
 });
 
 // Admin-only.

@@ -1,16 +1,16 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({ baseDirectory: __dirname });
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...nextVitals,
+  ...nextTypeScript,
   {
     ignores: [".next/**", "node_modules/**", "coverage/**", "next-env.d.ts"],
+    // Existing data-loading and listbox effects intentionally synchronize local
+    // state; keep the prior lint behavior while using Next 16's flat config.
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+    },
   },
 ];
 

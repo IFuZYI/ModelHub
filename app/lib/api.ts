@@ -7,7 +7,7 @@ export interface AuthStatus {
 
 /** Fetch the current session/admin status. Never throws on shape. */
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  const res = await fetch("/api/auth/status");
+  const res = await fetch("/api/auth/status", { credentials: "same-origin" });
   const json = await res.json().catch(() => ({}));
   return {
     authenticated: Boolean(json?.authenticated),
@@ -31,6 +31,7 @@ export async function importNewapiSite(
   const res = await fetch("/api/providers/import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ url }),
   });
   const json = await res.json().catch(() => ({}));

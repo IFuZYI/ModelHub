@@ -5,9 +5,9 @@ import Link from "next/link";
 import SiteHeader from "../../components/SiteHeader";
 import ProviderAvatar from "../../components/ProviderAvatar";
 import { TypeBadge } from "../../components/badges";
-import { statusLabel, modelVendor, vendorLabel } from "../../lib/display";
+import { modelVendor, vendorLabel } from "../../lib/display";
 import { fetchAuthStatus } from "../../lib/api";
-import { ProviderView } from "@/lib";
+import type { PublicProviderView } from "@/lib";
 
 export default function ProviderDetail({
   params,
@@ -15,7 +15,7 @@ export default function ProviderDetail({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [p, setP] = useState<ProviderView | null>(null);
+  const [p, setP] = useState<PublicProviderView | null>(null);
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -150,46 +150,12 @@ export default function ProviderDetail({
         )}
 
         <div className="admin-bar">
-          <span className="status">
-            <span className={`dot ${p.last_status}`} />
-            {statusLabel(p.last_status)}
-          </span>
-          {p.last_fetched && (
+          {p.register_methods && p.register_methods.length > 0 && (
             <span className="card-domain">
-              上次刷新：{new Date(p.last_fetched).toLocaleString()}
-            </span>
-          )}
-          {p.updated_at && (
-            <span className="card-domain">
-              模型更新：{new Date(p.updated_at).toLocaleString()}
+              支持：{p.register_methods.join("、")}
             </span>
           )}
         </div>
-
-        {p.last_error && (
-          <div className="error-box">抓取错误：{p.last_error}</div>
-        )}
-
-        {p.register_methods && p.register_methods.length > 0 && (
-          <div className="reg-section">
-            <div className="reg-section-label">支持的注册方式</div>
-            <div className="reg-methods">
-              {p.register_methods.map((m) => (
-                <span key={m} className="reg-chip">
-                  {m}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {p.last_status === "needs_key" && (
-          <div className="note-box">
-            该官方 API
-            需要密钥才能列出模型。当前显示的是内置示例模型；请在后台编辑填入 API
-            Key 后刷新，即可获取完整实时模型列表。
-          </div>
-        )}
 
         <div className="results-bar" style={{ marginTop: 30 }}>
           <span>
@@ -204,11 +170,7 @@ export default function ProviderDetail({
         </div>
 
         {p.model_count === 0 ? (
-          <div className="empty">
-            {p.last_status === "error"
-              ? "模型未知：该提供商未开放模型列表接口，或抓取失败。可在后台编辑手动填写模型。"
-              : "暂无模型缓存。"}
-          </div>
+          <div className="empty">暂无模型信息。</div>
         ) : (
           <>
             <input

@@ -10,10 +10,17 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Public: anyone can browse providers and their models (no key material returned).
-export const GET = withErrorHandling(async () => {
-  const { providers, settings } = await providerService.listWithSettings();
-  return NextResponse.json({ settings, providers });
+// Public lists are summaries so the homepage does not download every model id.
+// The full model arrays are only returned to an authenticated admin editing data.
+export const GET = withErrorHandling(async (req: Request) => {
+  const includeModels =
+    new URL(req.url).searchParams.get("includeModels") === "1";
+  if (includeModels) {
+    await requireAdmin();
+    const { providers, settings } = await providerService.listWithSettings();
+    return NextResponse.json({ settings, providers });
+  }
+  return NextResponse.json(await providerService.listSummariesWithSettings());
 });
 
 // Admin-only: create a provider.

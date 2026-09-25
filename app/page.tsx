@@ -5,36 +5,58 @@ import Link from "next/link";
 import SiteHeader from "./components/SiteHeader";
 import Select from "./components/Select";
 import ProviderAvatar from "./components/ProviderAvatar";
-import { TypeBadge, StatusDot } from "./components/badges";
-import { hostOf, categoryOf, distinctModelCount } from "./lib/display";
+import { TypeBadge } from "./components/badges";
+import { hostOf, categoryOf } from "./lib/display";
 import { fetchAuthStatus } from "./lib/api";
 import { ProviderView } from "@/lib";
+
+type ProviderSummary = Omit<
+  ProviderView,
+  | "models"
+  | "has_key"
+  | "last_fetched"
+  | "last_status"
+  | "last_error"
+  | "updated_at"
+>;
 
 type SortKey = "name" | "models";
 type CategoryFilter = "all" | "official" | "other";
 
 export default function Home() {
-  const [providers, setProviders] = useState<ProviderView[]>([]);
+  const [providers, setProviders] = useState<ProviderSummary[]>([]);
+  const [totalModels, setTotalModels] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState<CategoryFilter>("all");
   const [sort, setSort] = useState<SortKey>("models");
 
-  const load = useCallback(async () => {
-    const [pRes, auth] = await Promise.all([
-      fetch("/api/providers"),
-      fetchAuthStatus(),
-    ]);
-    const pJson = await pRes.json();
-    setProviders(pJson.providers ?? []);
-    setAuthed(auth.authenticated);
-    setLoading(false);
+  const runLoad = useCallback(async () => {
+    try {
+      const response = await fetch("/api/providers", {
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("无法加载提供商列表");
+      const payload = await response.json();
+      setProviders(payload.providers ?? []);
+      setTotalModels(payload.total_model_count ?? 0);
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "无法加载提供商列表");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void runLoad();
+  }, [runLoad]);
+
+  useEffect(() => {
+    void fetchAuthStatus().then((auth) => setAuthed(auth.authenticated));
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -42,9 +64,7 @@ export default function Home() {
       if (catFilter !== "all" && categoryOf(p.type) !== catFilter) return false;
       if (!q) return true;
       return (
-        p.name.toLowerCase().includes(q) ||
-        p.base_url.toLowerCase().includes(q) ||
-        p.models.some((m) => m.toLowerCase().includes(q))
+        p.name.toLowerCase().includes(q) || p.base_url.toLowerCase().includes(q)
       );
     });
     list = [...list].sort((a, b) =>
@@ -54,8 +74,6 @@ export default function Home() {
     );
     return list;
   }, [providers, query, catFilter, sort]);
-
-  const totalModels = distinctModelCount(providers.map((p) => p.models));
 
   return (
     <>
@@ -88,7 +106,7 @@ export default function Home() {
             <div className="search-wrap">
               <input
                 className="search-input"
-                placeholder="搜索提供商或模型…"
+                placeholder="搜索提供商或站点…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -125,6 +143,15 @@ export default function Home() {
 
         {loading ? (
           <div className="spin">加载中…</div>
+        ) : loadError ? (
+          <div className="empty">
+            {loadError}
+            <div style={{ marginTop: 16 }}>
+              <button className="btn secondary" onClick={() => void runLoad()}>
+                重试
+              </button>
+            </div>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty">
             {providers.length === 0
@@ -150,7 +177,6 @@ export default function Home() {
                   <TypeBadge type={p.type} />
                   <span className="card-tag">{p.model_count} 模型</span>
                   {p.aff_code && <span className="card-tag">邀请码</span>}
-                  <StatusDot status={p.last_status} />
                 </div>
               </Link>
             ))}

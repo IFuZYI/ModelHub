@@ -14,6 +14,8 @@ function adminRewrites() {
 const nextConfig: NextConfig = {
   // Emit a standalone server bundle for the Docker runtime stage.
   output: "standalone",
+  // Permit the desktop preview to load dev fonts and client resources.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   // Hide the Next.js dev-tools floating indicator (bottom-corner "N" button).
   devIndicators: false,
   // Private local tool; bind to localhost via `next start -H 127.0.0.1` if desired.
