@@ -79,8 +79,17 @@ export const providerConfigSchema = z.object({
     .transform((t) => normalizeType(t))
     .pipe(z.enum(["native", "proxy", "newapi", "custom"])),
   base_url: z.string(),
+  // Official website users visit (brand homepage / console). Distinct from
+  // base_url (the API endpoint) — this is what the "前往官网" link points to.
+  site_url: z.string().nullable().default(null),
   aff_code: z.string().nullable().default(null),
   adapter: z.string().default(DEFAULT_ADAPTER),
+  // models.dev catalog slug (api.json top-level key), used by the models-dev
+  // adapter to sync this provider's model list without a key. Null = unused.
+  models_dev_slug: z.string().nullable().default(null),
+  // LLMRates dataset provider slug, used by the llmrates adapter to sync the
+  // model list from the open pricing dataset without a key. Null = unused.
+  llmrates_slug: z.string().nullable().default(null),
   // key is optional: a public relay may expose /api/pricing without auth
   key_enc: encryptedValueSchema.nullable().default(null),
   // When true, models are a built-in list and refresh must not overwrite them
@@ -129,8 +138,11 @@ export const legacyStoredProviderSchema = z.object({
     .transform((t) => normalizeType(t))
     .pipe(z.enum(["native", "proxy", "newapi", "custom"])),
   base_url: z.string(),
+  site_url: z.string().nullable().default(null),
   aff_code: z.string().nullable().default(null),
   adapter: z.string().default(DEFAULT_ADAPTER),
+  models_dev_slug: z.string().nullable().default(null),
+  llmrates_slug: z.string().nullable().default(null),
   key_enc: encryptedValueSchema.nullable().default(null),
   manual_models: z.boolean().default(false),
   icon: z.string().nullable().default(null),
@@ -156,6 +168,12 @@ export interface ProviderConfig {
   aff_code: string | null;
   /** Upstream adapter id (see lib/upstream). Defaults to openai-compatible. */
   adapter: string;
+  /** Official website users visit (brand homepage / console). Null = unset. */
+  site_url: string | null;
+  /** models.dev catalog slug for the models-dev adapter, or null. */
+  models_dev_slug: string | null;
+  /** LLMRates dataset provider slug for the llmrates adapter, or null. */
+  llmrates_slug: string | null;
   /** Encrypted API key. Null when the provider needs no auth. */
   key_enc: EncryptedValue | null;
   /** When true, models are a built-in list; refresh must not overwrite them. */
@@ -188,6 +206,9 @@ export interface StoredProvider {
   base_url: string;
   aff_code: string | null;
   adapter: string;
+  site_url: string | null;
+  models_dev_slug: string | null;
+  llmrates_slug: string | null;
   key_enc: EncryptedValue | null;
   manual_models: boolean;
   icon: string | null;
@@ -200,7 +221,7 @@ export interface StoredProvider {
   updated_at: string | null;
 }
 
-/** Client-facing view: no key material. */
+/** Full administrative view, including operational refresh diagnostics. */
 export interface ProviderView {
   id: string;
   name: string;
@@ -208,6 +229,12 @@ export interface ProviderView {
   base_url: string;
   aff_code: string | null;
   adapter: string;
+  /** Official website users visit (brand homepage / console). Null = unset. */
+  site_url: string | null;
+  /** models.dev catalog slug for the models-dev adapter, or null. */
+  models_dev_slug: string | null;
+  /** LLMRates dataset provider slug for the llmrates adapter, or null. */
+  llmrates_slug: string | null;
   /** Whether an API key is stored (never the key itself). */
   has_key: boolean;
   /** When true, models are a built-in list not refreshed from upstream. */
@@ -215,7 +242,11 @@ export interface ProviderView {
   icon: string | null;
   /** Supported sign-up/login methods (NewAPI sites). */
   register_methods: string[];
-  /** base_url origin + ?aff=<code> when an invite code is set, else the origin. */
+  /**
+   * Where the "前往官网/站点" link points. For providers with a `site_url`
+   * (official presets) it's that homepage; otherwise the base_url origin.
+   * A newapi invite code is appended as ?aff=<code> when present.
+   */
   invite_url: string | null;
   models: string[];
   model_count: number;
@@ -229,6 +260,14 @@ export interface ProviderView {
 export interface Settings {
   refresh_interval_hours: number;
 }
+
+/** Lightweight list view: preserves counts and metadata but omits model ids. */
+export type PublicProviderView = Omit<
+  ProviderView,
+  "has_key" | "last_fetched" | "last_status" | "last_error" | "updated_at"
+>;
+
+export type ProviderSummary = Omit<PublicProviderView, "models">;
 
 export interface DataFile {
   settings: Settings;
@@ -260,6 +299,9 @@ export function composeProvider(
     base_url: cfg.base_url,
     aff_code: cfg.aff_code,
     adapter: cfg.adapter,
+    site_url: cfg.site_url,
+    models_dev_slug: cfg.models_dev_slug,
+    llmrates_slug: cfg.llmrates_slug,
     key_enc: cfg.key_enc,
     manual_models: cfg.manual_models,
     icon: cfg.icon,
@@ -285,6 +327,9 @@ export function splitProvider(p: StoredProvider): {
       base_url: p.base_url,
       aff_code: p.aff_code,
       adapter: p.adapter,
+      site_url: p.site_url,
+      models_dev_slug: p.models_dev_slug,
+      llmrates_slug: p.llmrates_slug,
       key_enc: p.key_enc,
       manual_models: p.manual_models,
       icon: p.icon,
@@ -303,23 +348,53 @@ export function splitProvider(p: StoredProvider): {
 }
 
 /**
- * Build the site URL for a provider, appending the newapi invite code as
- * `?aff=<code>` when present. Uses the base_url's origin (strips /v1 etc.),
- * falling back to the raw base_url if it isn't a parseable URL.
+ * Build the link users click to reach the provider. Prefers an explicit
+ * `siteUrl` (the official brand homepage / console set on presets) so official
+ * platforms link to their website, not their API endpoint. Falls back to the
+ * base_url origin (strips /v1 etc.) for user-added sites without a site_url.
+ * A newapi invite code is appended as `?aff=<code>` when present.
  */
 export function buildInviteUrl(
   baseUrl: string,
-  affCode: string | null
+  affCode: string | null,
+  siteUrl?: string | null
 ): string | null {
   let site: string;
-  try {
-    site = new URL(baseUrl).origin;
-  } catch {
-    site = baseUrl.replace(/\/+$/, "");
+  const source = siteUrl && siteUrl.trim() ? siteUrl.trim() : baseUrl;
+  if (siteUrl && siteUrl.trim()) {
+    // An explicit site_url is used as-is (may be a deep path like /product/ark).
+    site = siteUrl.trim().replace(/\/+$/, "");
+  } else {
+    try {
+      site = new URL(source).origin;
+    } catch {
+      site = source.replace(/\/+$/, "");
+    }
   }
   if (!affCode) return site || null;
   const sep = site.includes("?") ? "&" : "?";
   return `${site}${sep}aff=${encodeURIComponent(affCode)}`;
+}
+
+export function toPublicView(p: StoredProvider): PublicProviderView {
+  const view = toView(p);
+  return {
+    id: view.id,
+    name: view.name,
+    type: view.type,
+    base_url: view.base_url,
+    aff_code: view.aff_code,
+    adapter: view.adapter,
+    site_url: view.site_url,
+    models_dev_slug: view.models_dev_slug,
+    llmrates_slug: view.llmrates_slug,
+    manual_models: view.manual_models,
+    icon: view.icon,
+    register_methods: view.register_methods,
+    invite_url: view.invite_url,
+    models: view.models,
+    model_count: view.model_count,
+  };
 }
 
 /** Project a stored provider into its client-safe view (drops key material). */
@@ -331,11 +406,14 @@ export function toView(p: StoredProvider): ProviderView {
     base_url: p.base_url,
     aff_code: p.aff_code ?? null,
     adapter: p.adapter,
+    site_url: p.site_url ?? null,
+    models_dev_slug: p.models_dev_slug ?? null,
+    llmrates_slug: p.llmrates_slug ?? null,
     has_key: p.key_enc !== null,
     manual_models: p.manual_models,
     icon: p.icon,
     register_methods: p.register_methods,
-    invite_url: buildInviteUrl(p.base_url, p.aff_code ?? null),
+    invite_url: buildInviteUrl(p.base_url, p.aff_code ?? null, p.site_url),
     models: p.models,
     model_count: p.models.length,
     last_fetched: p.last_fetched,

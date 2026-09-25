@@ -6,7 +6,7 @@ import { AppError, isAppError } from "../domain/errors";
 import { StoredProvider } from "../domain/provider";
 import { fileRepository, ProviderRepository } from "../infra/repository";
 import { fetchWithTimeout } from "../infra/http";
-import { getAdapter } from "../upstream";
+import { buildModelFetchAttempts } from "../upstream";
 import type { UpstreamAttempt } from "../upstream";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -15,11 +15,11 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
-/** True when an AppError.upstream detail marks a 401/403 auth challenge. */
-function isAuthStatus(details: unknown): boolean {
+/** True when an upstream error is an auth challenge or an optional endpoint absent. */
+function isAuthOrUnsupportedStatus(details: unknown): boolean {
   if (details && typeof details === "object" && "status" in details) {
     const s = (details as { status?: unknown }).status;
-    return s === 401 || s === 403;
+    return s === 401 || s === 403 || s === 404;
   }
   return false;
 }
@@ -120,12 +120,20 @@ export async function fetchProviderModels(
     };
   }
 
-  const adapter = getAdapter(provider.adapter);
   const key = provider.key_enc ? decrypt(provider.key_enc) : null;
-  const attempts = adapter.buildAttempts(provider.base_url, key);
+  // Live API first (best with a key); then the no-key catalog fallbacks
+  // (models.dev, LLMRates) when configured — so official platforms can still
+  // list models without a key.
+  const attempts = buildModelFetchAttempts({
+    adapter: provider.adapter,
+    baseUrl: provider.base_url,
+    key,
+    modelsDevSlug: provider.models_dev_slug,
+    llmratesSlug: provider.llmrates_slug,
+  });
 
   const errors: string[] = [];
-  let sawAuthError = false; // any attempt failed purely on 401/403
+  let allFailuresAreAuthOrUnsupported = true;
   for (const attempt of attempts) {
     try {
       const models = await runAttempt(attempt, log);
@@ -147,16 +155,19 @@ export async function fetchProviderModels(
       errors.push(`${attempt.name}: empty`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      if (isAppError(err) && isAuthStatus(err.details)) sawAuthError = true;
+      if (!(isAppError(err) && isAuthOrUnsupportedStatus(err.details))) {
+        allFailuresAreAuthOrUnsupported = false;
+      }
       log.warn({ via: attempt.name }, `attempt failed: ${message}`);
       errors.push(`${attempt.name}: ${message}`);
     }
   }
 
-  // No key stored + every failure was an auth challenge (401/403): this is an
-  // expected "needs a key" state, not a broken provider. Keep seed models and
-  // flag it distinctly so the UI can prompt for a key instead of "刷新失败".
-  if (!key && sawAuthError) {
+  // No key stored + every failed attempt was an auth challenge or an absent
+  // optional endpoint: this is an expected "needs a key" state, not a broken
+  // provider. Keep seed models and flag it distinctly so the UI can prompt for
+  // a key instead of "刷新失败".
+  if (!key && errors.length > 0 && allFailuresAreAuthOrUnsupported) {
     log.info({ errors }, "auth required; awaiting API key");
     return {
       ...provider,

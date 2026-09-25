@@ -8,6 +8,14 @@ export interface UpstreamRequest {
   headers: Record<string, string>;
 }
 
+/** Extra per-provider context an adapter may need to build its attempts. */
+export interface UpstreamAttemptOptions {
+  /** models.dev provider slug (for the models-dev adapter). */
+  modelsDevSlug?: string | null;
+  /** LLMRates dataset provider slug (for the llmrates adapter). */
+  llmratesSlug?: string | null;
+}
+
 export interface UpstreamAdapter {
   /** Stable id persisted on the provider (StoredProvider.adapter). */
   id: string;
@@ -20,8 +28,13 @@ export interface UpstreamAdapter {
    *
    * @param baseUrl provider base URL WITHOUT a trailing /v1 (e.g. https://x.com)
    * @param key decrypted API key, or null when the provider has no key
+   * @param opts extra per-provider context (e.g. models.dev slug)
    */
-  buildAttempts(baseUrl: string, key: string | null): UpstreamAttempt[];
+  buildAttempts(
+    baseUrl: string,
+    key: string | null,
+    opts?: UpstreamAttemptOptions
+  ): UpstreamAttempt[];
 }
 
 export interface UpstreamAttempt {

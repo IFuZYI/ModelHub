@@ -88,6 +88,23 @@ describe("ProviderService", () => {
     expect(JSON.stringify(view)).not.toContain("key_enc");
   });
 
+  it("lists lightweight provider summaries without model arrays", async () => {
+    const s = svc();
+    await s.create({
+      name: "Summary",
+      type: "native",
+      base_url: base,
+      key: "sk-1",
+    });
+
+    const result = await s.listSummariesWithSettings();
+
+    expect(result.providers).toHaveLength(1);
+    expect(result.providers[0]).not.toHaveProperty("models");
+    expect(result.providers[0].model_count).toBe(2);
+    expect(result.total_model_count).toBe(2);
+  });
+
   it("lists and gets by id", async () => {
     const s = svc();
     const created = await s.create({
@@ -100,7 +117,7 @@ describe("ProviderService", () => {
     expect((await s.getView(created.id)).name).toBe("T");
   });
 
-  it("update keeps key when not provided, clears aff on empty", async () => {
+  it("update keeps key when omitted, clears it when empty, and can restore it", async () => {
     const s = svc();
     const created = await s.create({
       name: "T",
@@ -110,8 +127,17 @@ describe("ProviderService", () => {
       key: "sk-1",
     });
     expect(created.aff_code).toBe("INV1");
-    const updated = await s.update(created.id, { aff_code: "" });
-    expect(updated.aff_code).toBeNull();
+    expect(created.has_key).toBe(true);
+
+    const unchanged = await s.update(created.id, { aff_code: "" });
+    expect(unchanged.aff_code).toBeNull();
+    expect(unchanged.has_key).toBe(true);
+
+    const cleared = await s.update(created.id, { key: "" });
+    expect(cleared.has_key).toBe(false);
+
+    const restored = await s.update(created.id, { key: "sk-2" });
+    expect(restored.has_key).toBe(true);
   });
 
   it("creates a provider WITHOUT a key (public pricing)", async () => {
@@ -171,5 +197,20 @@ describe("ProviderService", () => {
     expect(updated.manual_models).toBe(true);
     expect(updated.models).toEqual(["m-a", "m-z"]); // sorted, kept as-is
     expect(updated.last_status).toBe("ok");
+  });
+
+  it("persists models_dev_slug on create and clears it on update", async () => {
+    const s = svc();
+    const created = await s.create({
+      name: "MD",
+      type: "native",
+      base_url: base,
+      adapter: "openai-compatible",
+      models_dev_slug: "openai",
+    });
+    expect(created.models_dev_slug).toBe("openai");
+
+    const cleared = await s.update(created.id, { models_dev_slug: "" });
+    expect(cleared.models_dev_slug).toBeNull();
   });
 });

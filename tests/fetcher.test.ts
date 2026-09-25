@@ -18,7 +18,7 @@ import type { StoredProvider } from "@/lib/domain/provider";
 let server: http.Server;
 let port = 0;
 // Controls what the mock upstream does per endpoint.
-let pricing: "ok" | "404" | "500-then-ok" | "html" = "ok";
+let pricing: "ok" | "404" | "500" | "500-then-ok" | "html" = "ok";
 let models: "ok" | "401" = "ok";
 let modelsRoot: "ok" | "404" = "404";
 let pricingHits = 0;
@@ -38,7 +38,10 @@ beforeAll(async () => {
         res.writeHead(200, { "Content-Type": "text/html" });
         return res.end("<!DOCTYPE html><html>nope</html>");
       }
-      if (pricing === "500-then-ok" && pricingHits === 1) {
+      if (
+        pricing === "500" ||
+        (pricing === "500-then-ok" && pricingHits === 1)
+      ) {
         res.writeHead(500);
         return res.end("boom");
       }
@@ -93,6 +96,9 @@ function makeProvider(withKey = true): StoredProvider {
     base_url: `http://127.0.0.1:${port}`,
     aff_code: null,
     adapter: "openai-compatible",
+    site_url: null,
+    models_dev_slug: null,
+    llmrates_slug: null,
     key_enc: withKey ? encrypt("sk-test") : null,
     manual_models: false,
     icon: null,
@@ -195,6 +201,22 @@ describe("refreshProvider (pricing → models fallback)", () => {
     expect(r.last_status).toBe("needs_key");
     expect(r.last_error).toBeNull();
     expect(r.models).toEqual(["seed-a", "seed-b"]); // seed preserved
+  });
+
+  it("does not mislabel mixed authorization and upstream failures as needs_key", async () => {
+    // Pricing is unavailable and the model endpoint requires a key, but a
+    // different attempt has an upstream error. This is not solely an auth
+    // challenge, so the provider must remain in an error state.
+    pricing = "500";
+    models = "401";
+    modelsRoot = "404";
+    const p = makeProvider(false);
+    await repo.upsert(p);
+
+    const r = await refreshProvider(p);
+
+    expect(r.last_status).toBe("error");
+    expect(r.last_error).toContain("pricing: HTTP 500");
   });
 
   it("errors (not needs_key) when a key is present but auth still fails", async () => {

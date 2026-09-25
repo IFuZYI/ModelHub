@@ -3,14 +3,25 @@ import { encrypt } from "../infra/crypto";
 import { AppError } from "../domain/errors";
 import {
   ProviderView,
+  PublicProviderView,
+  ProviderSummary,
   StoredProvider,
   DataFile,
   toView,
+  toPublicView,
   DEFAULT_ADAPTER,
 } from "../domain/provider";
 import { fileRepository, ProviderRepository } from "../infra/repository";
 import { refreshProvider } from "./fetcher";
 import { CreateProviderInput, UpdateProviderInput } from "../domain/validation";
+
+function modelDedupeKey(model: string): string {
+  const trimmed = model.trim();
+  const lastSlash = trimmed.lastIndexOf("/");
+  return (
+    lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed
+  ).toLowerCase();
+}
 
 /**
  * Provider use-cases. Depends on a ProviderRepository (default: file-backed)
@@ -33,6 +44,49 @@ export class ProviderService {
     return { providers: data.providers.map(toView), settings: data.settings };
   }
 
+  /** List metadata only, avoiding thousands of model ids on the homepage/admin. */
+  async listSummariesWithSettings(): Promise<{
+    providers: ProviderSummary[];
+    settings: DataFile["settings"];
+    total_model_count: number;
+  }> {
+    const data = await this.repo.read();
+    const providers = data.providers.map((provider) => {
+      const view = toPublicView(provider);
+      return {
+        id: view.id,
+        name: view.name,
+        type: view.type,
+        base_url: view.base_url,
+        aff_code: view.aff_code,
+        adapter: view.adapter,
+        site_url: view.site_url,
+        models_dev_slug: view.models_dev_slug,
+        llmrates_slug: view.llmrates_slug,
+        manual_models: view.manual_models,
+        icon: view.icon,
+        register_methods: view.register_methods,
+        invite_url: view.invite_url,
+        model_count: view.model_count,
+      };
+    });
+    return {
+      providers,
+      settings: data.settings,
+      total_model_count: new Set(
+        data.providers.flatMap((provider) =>
+          provider.models.map(modelDedupeKey).filter(Boolean)
+        )
+      ).size,
+    };
+  }
+
+  async getPublicView(id: string): Promise<PublicProviderView> {
+    const p = await this.repo.get(id);
+    if (!p) throw AppError.notFound("Provider not found");
+    return toPublicView(p);
+  }
+
   async getView(id: string): Promise<ProviderView> {
     const p = await this.repo.get(id);
     if (!p) throw AppError.notFound("Provider not found");
@@ -50,6 +104,9 @@ export class ProviderService {
       base_url: input.base_url,
       aff_code: input.aff_code ? input.aff_code : null,
       adapter: input.adapter ?? DEFAULT_ADAPTER,
+      site_url: input.site_url ? input.site_url : null,
+      models_dev_slug: input.models_dev_slug ? input.models_dev_slug : null,
+      llmrates_slug: input.llmrates_slug ? input.llmrates_slug : null,
       key_enc: input.key ? encrypt(input.key) : null,
       manual_models: manual,
       icon: input.icon ? input.icon : null,
@@ -87,13 +144,28 @@ export class ProviderService {
     if (input.type !== undefined) updated.type = input.type;
     if (input.base_url !== undefined) updated.base_url = input.base_url;
     if (input.adapter !== undefined) updated.adapter = input.adapter;
+    // site_url: empty string clears, a value sets, undefined leaves unchanged
+    if (input.site_url !== undefined) {
+      updated.site_url = input.site_url ? input.site_url : null;
+    }
+    // models_dev_slug: empty string clears, a value sets, undefined leaves it
+    if (input.models_dev_slug !== undefined) {
+      updated.models_dev_slug = input.models_dev_slug
+        ? input.models_dev_slug
+        : null;
+    }
+    // llmrates_slug: empty string clears, a value sets, undefined leaves it
+    if (input.llmrates_slug !== undefined) {
+      updated.llmrates_slug = input.llmrates_slug ? input.llmrates_slug : null;
+    }
     // aff_code: empty string clears, a value sets, undefined leaves unchanged
     if (input.aff_code !== undefined) {
       updated.aff_code = input.aff_code ? input.aff_code : null;
     }
-    // Only re-encrypt when a new non-empty key is supplied.
-    if (input.key && input.key.length > 0) {
-      updated.key_enc = encrypt(input.key);
+    // A supplied empty key explicitly clears the stored credential; omission
+    // leaves it unchanged so edits to unrelated fields stay non-destructive.
+    if (input.key !== undefined) {
+      updated.key_enc = input.key ? encrypt(input.key) : null;
     }
     // icon: empty string clears, a value sets, undefined leaves unchanged
     if (input.icon !== undefined) {
