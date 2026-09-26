@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import {
   withErrorHandling,
   parseJson,
-  updateProviderSchema,
+  requireUser,
+  updateUserProviderSchema,
+  userProviderService,
+  publicService,
   assertMasterKey,
-  requireAdmin,
-  providerService,
 } from "@/lib";
 
 export const dynamic = "force-dynamic";
@@ -15,22 +16,24 @@ type Ctx = { params: Promise<{ id: string }> };
 // Public detail (models only, no key).
 export const GET = withErrorHandling(async (_req: Request, ctx: Ctx) => {
   const { id } = await ctx.params;
-  return NextResponse.json(await providerService.getPublicView(id));
+  return NextResponse.json(await publicService.detail(id));
 });
 
-// Admin-only.
+// Owner-only update.
 export const PUT = withErrorHandling(async (req: Request, ctx: Ctx) => {
-  await requireAdmin();
+  const session = await requireUser();
   const { id } = await ctx.params;
-  const input = await parseJson(req, updateProviderSchema);
+  const input = await parseJson(req, updateUserProviderSchema);
   if (input.key) assertMasterKey();
-  return NextResponse.json(await providerService.update(id, input));
+  return NextResponse.json(
+    await userProviderService.update(session.userId, session.role, id, input)
+  );
 });
 
-// Admin-only.
+// Owner-only delete.
 export const DELETE = withErrorHandling(async (_req: Request, ctx: Ctx) => {
-  await requireAdmin();
+  const session = await requireUser();
   const { id } = await ctx.params;
-  await providerService.remove(id);
+  await userProviderService.remove(session.userId, id);
   return NextResponse.json({ ok: true });
 });

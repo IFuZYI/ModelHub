@@ -22,7 +22,13 @@ const nextConfig: NextConfig = {
   // pino/pino-pretty spawn a worker thread via thread-stream that Next's bundler
   // cannot emit correctly (results in MODULE_NOT_FOUND for vendor-chunks/lib/worker.js).
   // Keep these external so they load from node_modules at runtime.
-  serverExternalPackages: ["pino", "pino-pretty", "thread-stream"],
+  serverExternalPackages: [
+    "better-sqlite3",
+    "pg",
+    "pino",
+    "pino-pretty",
+    "thread-stream",
+  ],
   async rewrites() {
     return adminRewrites();
   },

@@ -13,6 +13,8 @@ const rawSchema = z.object({
     .optional(),
   MODELHUB_ADMIN_PASSWORD: z.string().min(1).optional(),
   MODELHUB_DATA_PATH: z.string().optional(),
+  DATABASE_DRIVER: z.enum(["sqlite", "postgres"]).optional(),
+  DATABASE_URL: z.string().min(1).optional(),
   MODELHUB_REFRESH_INTERVAL_HOURS: z.coerce.number().positive().optional(),
   MODELHUB_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
   MODELHUB_FETCH_RETRIES: z.coerce.number().int().min(0).max(5).optional(),
@@ -44,6 +46,8 @@ export const config = {
   masterKey: env.MODELHUB_MASTER_KEY ?? null,
   adminPassword: env.MODELHUB_ADMIN_PASSWORD ?? null,
   dataPath: env.MODELHUB_DATA_PATH ?? null, // resolved lazily by the repository
+  databaseDriver: env.DATABASE_DRIVER ?? "sqlite",
+  databaseUrl: env.DATABASE_URL ?? null,
   defaultRefreshIntervalHours: env.MODELHUB_REFRESH_INTERVAL_HOURS ?? 6,
   fetchTimeoutMs: env.MODELHUB_FETCH_TIMEOUT_MS ?? 15_000,
   fetchRetries: env.MODELHUB_FETCH_RETRIES ?? 2,

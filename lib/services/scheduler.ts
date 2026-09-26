@@ -1,7 +1,8 @@
-import { refreshAll } from "./fetcher";
 import { config } from "../config/env";
 import { logger } from "../infra/logger";
-import { fileRepository } from "../infra/repository";
+import { getDatabase } from "../infra/db";
+import { SettingsRepository } from "../infra/repositories/settingsRepo";
+import { userProviderService } from "./userProviderService";
 
 /**
  * In-process periodic refresh scheduler. Module-level (globalThis) guard keeps
@@ -19,7 +20,8 @@ async function runRefresh(reason: string): Promise<void> {
   }
   g.__modelhubRunning = true;
   try {
-    await refreshAll(fileRepository);
+    const count = await userProviderService.refreshAll(config.refreshConcurrency);
+    logger.info({ reason, count }, "refreshAll complete");
   } catch (e) {
     logger.error({ err: String(e), reason }, "scheduled refresh error");
   } finally {
@@ -30,9 +32,10 @@ async function runRefresh(reason: string): Promise<void> {
 export async function startScheduler(): Promise<void> {
   if (g.__modelhubScheduler) return;
 
-  const { settings } = await fileRepository.read();
+  const settings = new SettingsRepository(getDatabase());
   const hours =
-    settings.refresh_interval_hours || config.defaultRefreshIntervalHours;
+    (await settings.get<number>("refresh_interval_hours", 0)) ||
+    config.defaultRefreshIntervalHours;
   const intervalMs = hours * 60 * 60 * 1000;
 
   g.__modelhubScheduler = setInterval(() => {

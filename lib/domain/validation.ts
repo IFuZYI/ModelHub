@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { listAdapters } from "../upstream";
 import { FREE_TIERS } from "./provider";
+import {
+  usernameSchema,
+  passwordSchema,
+  emailSchema,
+  roleSchema,
+} from "./user";
 
 /** Shared validation schemas for provider payloads. */
 
@@ -116,3 +122,110 @@ export const updateProviderSchema = z
 
 export type CreateProviderInput = z.infer<typeof createProviderSchema>;
 export type UpdateProviderInput = z.infer<typeof updateProviderSchema>;
+
+// ---- auth / user payloads (v0.3) ----
+
+export const loginSchema = z.object({
+  username: z.string().trim().min(1),
+  password: z.string().min(1),
+});
+
+export const registerSchema = z.object({
+  username: usernameSchema,
+  password: passwordSchema,
+  email: emailSchema.optional(),
+});
+
+/** Admin-created user. Role defaults to "user" when omitted. */
+export const adminCreateUserSchema = z.object({
+  username: usernameSchema,
+  password: passwordSchema,
+  email: emailSchema.optional(),
+  role: roleSchema.optional(),
+});
+
+/** Admin edits to a user; every field optional. */
+export const adminUpdateUserSchema = z
+  .object({
+    password: passwordSchema.optional(),
+    email: emailSchema.nullable().optional(),
+    role: roleSchema.optional(),
+    status: z.enum(["active", "disabled"]).optional(),
+  })
+  .refine((o) => Object.keys(o).length > 0, {
+    message: "at least one field is required",
+  });
+
+/** Self password change. */
+export const changePasswordSchema = z.object({
+  current_password: z.string().min(1),
+  new_password: passwordSchema,
+});
+
+// ---- settings payload (v0.3) ----
+
+export const settingsUpdateSchema = z
+  .object({
+    registration_enabled: z.boolean().optional(),
+    email_verification_required: z.boolean().optional(),
+    email_domain_whitelist: z.array(z.string().trim().min(1).max(255)).max(50).optional(),
+    personal_pages_enabled: z.boolean().optional(),
+    key_share_enabled: z.boolean().optional(),
+    key_share_consumers: z.enum(["admin", "everyone"]).optional(),
+    smtp_host: z.string().trim().max(255).optional(),
+    smtp_port: z.coerce.number().int().min(1).max(65535).optional(),
+    smtp_username: z.string().trim().max(255).optional(),
+    smtp_password: z.string().max(500).optional(),
+    smtp_from: z.string().trim().max(255).optional(),
+  })
+  .refine((o) => Object.keys(o).length > 0, {
+    message: "at least one field is required",
+  });
+
+export type LoginInput = z.infer<typeof loginSchema>;
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
+export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;
+
+// ---- user-provider payloads (v0.3, per-user mounts) ----
+
+export const createUserProviderSchema = z.object({
+  name: z.string().trim().min(1, "name is required").max(100),
+  description: descriptionSchema.optional(),
+  type: providerTypeSchema,
+  base_url: baseUrlSchema,
+  free_tier: z.enum(FREE_TIERS).optional(),
+  icon: iconSchema.optional(),
+  aff_code: affCodeSchema.optional(),
+  adapter: adapterSchema.optional(),
+  catalog_slugs: catalogSlugsSchema.optional(),
+  key: z.string().trim().max(500).optional(),
+  models: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
+  manual_models: z.boolean().optional(),
+  register_methods: registerMethodsSchema.optional(),
+});
+
+export const updateUserProviderSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    description: descriptionSchema.optional(),
+    type: providerTypeSchema.optional(),
+    base_url: baseUrlSchema.optional(),
+    free_tier: z.enum(FREE_TIERS).optional(),
+    icon: iconSchema.optional(),
+    aff_code: affCodeSchema.optional(),
+    adapter: adapterSchema.optional(),
+    catalog_slugs: catalogSlugsSchema.optional(),
+    key: z.string().trim().max(500).optional(),
+    models: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
+    manual_models: z.boolean().optional(),
+    register_methods: registerMethodsSchema.optional(),
+  })
+  .refine((o) => Object.keys(o).length > 0, {
+    message: "at least one field is required",
+  });
+
+export type CreateUserProviderInput = z.infer<typeof createUserProviderSchema>;
+export type UpdateUserProviderInput = z.infer<typeof updateUserProviderSchema>;

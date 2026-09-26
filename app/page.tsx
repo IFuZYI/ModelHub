@@ -7,7 +7,7 @@ import Select from "./components/Select";
 import ProviderAvatar from "./components/ProviderAvatar";
 import { TypeBadge, FreeBadge } from "./components/badges";
 import { hostOf, categoryOf } from "./lib/display";
-import { fetchAuthStatus } from "./lib/api";
+import { fetchAuthStatus, logout } from "./lib/api";
 import { ProviderView } from "@/lib";
 
 type ProviderSummary = Omit<
@@ -29,6 +29,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
+  const [role, setRole] = useState<"admin" | "user" | "guest">("guest");
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState<CategoryFilter>("all");
   const [sort, setSort] = useState<SortKey>("models");
@@ -55,7 +56,10 @@ export default function Home() {
   }, [runLoad]);
 
   useEffect(() => {
-    void fetchAuthStatus().then((auth) => setAuthed(auth.authenticated));
+    void fetchAuthStatus().then((auth) => {
+      setAuthed(auth.authenticated);
+      setRole(auth.role);
+    });
   }, []);
 
   const filtered = useMemo(() => {
@@ -77,7 +81,15 @@ export default function Home() {
 
   return (
     <>
-      <SiteHeader authenticated={authed} />
+      <SiteHeader
+        authenticated={authed}
+        role={role}
+        onLogout={async () => {
+          await logout();
+          setAuthed(false);
+          setRole("guest");
+        }}
+      />
       <main className="shell">
         <section className="intro">
           <div className="eyebrow">API 模型索引</div>

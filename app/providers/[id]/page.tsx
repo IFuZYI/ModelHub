@@ -7,7 +7,7 @@ import ProviderAvatar from "../../components/ProviderAvatar";
 import { TypeBadge, FreeBadge } from "../../components/badges";
 import { modelVendor, vendorLabel } from "../../lib/display";
 import { fetchAuthStatus } from "../../lib/api";
-import type { PublicProviderView } from "@/lib";
+import type { PublicProviderDetail } from "@/lib";
 
 export default function ProviderDetail({
   params,
@@ -15,7 +15,7 @@ export default function ProviderDetail({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [p, setP] = useState<PublicProviderView | null>(null);
+  const [p, setP] = useState<PublicProviderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(false);
   const [notFound, setNotFound] = useState(false);

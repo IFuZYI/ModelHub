@@ -2,15 +2,38 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SiteHeader from "../components/SiteHeader";
 import Select from "../components/Select";
 import { TypeBadge, StatusDot } from "../components/badges";
 import ProviderAvatar from "../components/ProviderAvatar";
-import { fetchAuthStatus, importNewapiSite } from "../lib/api";
+import { fetchAuthStatus, importNewapiSite, logout as apiLogout } from "../lib/api";
 import { typeLabel } from "../lib/display";
-import { ProviderView, ProviderType, FreeTier } from "@/lib";
+import { ProviderType, FreeTier } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
 import type { OfficialPreset } from "@/lib/domain/presets";
+
+/** The current user's provider (mirror of lib UserProviderView, client-side). */
+interface ProviderView {
+  id: string;
+  name: string;
+  description: string | null;
+  type: ProviderType;
+  base_url: string;
+  free_tier: FreeTier;
+  icon: string | null;
+  aff_code: string | null;
+  adapter: string;
+  catalog_slugs: Record<string, string>;
+  has_key: boolean;
+  manual_models: boolean;
+  register_methods: string[];
+  invite_url: string | null;
+  model_count: number;
+  models: string[];
+  last_status: "ok" | "error" | "pending" | "needs_key";
+  last_error: string | null;
+}
 
 interface FormState {
   id?: string;
@@ -85,14 +108,10 @@ const EMPTY_FORM: FormState = {
 type Flow = "menu" | "official" | "other" | "newapi" | "form";
 
 export default function AdminPage() {
+  const router = useRouter();
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
-  const [adminConfigured, setAdminConfigured] = useState(true);
-
-  // login form
-  const [password, setPassword] = useState("");
-  const [loginErr, setLoginErr] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [role, setRole] = useState<"admin" | "user" | "guest">("guest");
 
   // providers
   const [providers, setProviders] = useState<ProviderView[]>([]);
@@ -112,16 +131,16 @@ export default function AdminPage() {
   const [presetNote, setPresetNote] = useState<string | null>(null);
 
   const loadProviders = useCallback(async () => {
-    const res = await fetch("/api/providers?includeModels=1");
+    const res = await fetch("/api/me/providers", { credentials: "same-origin" });
     const json = await res.json();
     setProviders(json.providers ?? []);
   }, []);
 
   const checkAuth = useCallback(async () => {
-    const { authenticated, adminConfigured } = await fetchAuthStatus();
-    setAuthed(authenticated);
-    setAdminConfigured(adminConfigured);
-    if (authenticated) await loadProviders();
+    const status = await fetchAuthStatus();
+    setAuthed(status.authenticated);
+    setRole(status.role);
+    if (status.authenticated) await loadProviders();
     setReady(true);
   }, [loadProviders]);
 
@@ -129,31 +148,9 @@ export default function AdminPage() {
     checkAuth();
   }, [checkAuth]);
 
-  async function login(e: React.FormEvent) {
-    e.preventDefault();
-    setLoggingIn(true);
-    setLoginErr(null);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || "登录失败");
-      setPassword("");
-      await checkAuth();
-    } catch (err) {
-      setLoginErr(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoggingIn(false);
-    }
-  }
-
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setAuthed(false);
-    setProviders([]);
+    await apiLogout();
+    router.replace("/login");
   }
 
   function resetModalState() {
@@ -459,65 +456,50 @@ export default function AdminPage() {
       </>
     );
 
-  // ---- not authenticated: login screen ----
+  // ---- not authenticated: gate to login ----
   if (!authed)
     return (
       <>
-        <SiteHeader authenticated={false} />
+        <SiteHeader authenticated={false} role="guest" />
         <main className="shell">
-          <div className="login-wrap">
-            <div className="login-card">
-              <h1>管理后台</h1>
-              <p>
-                {adminConfigured
-                  ? "输入管理员密码以配置提供商。"
-                  : "未设置 MODELHUB_ADMIN_PASSWORD，后台已禁用。请在环境变量中配置后重启。"}
-              </p>
-              {adminConfigured && (
-                <form onSubmit={login}>
-                  <div className="field">
-                    <label>密码</label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="管理员密码"
-                      required
-                    />
-                  </div>
-                  {loginErr && <div className="error-box">{loginErr}</div>}
-                  <button
-                    type="submit"
-                    className="btn"
-                    style={{ width: "100%" }}
-                    disabled={loggingIn}
-                  >
-                    {loggingIn ? "登录中…" : "登录"}
-                  </button>
-                </form>
-              )}
-              <div style={{ marginTop: 18, textAlign: "center" }}>
-                <Link href="/" className="back-link">
-                  ← 返回前台
-                </Link>
-              </div>
+          <div className="empty">
+            请先登录。
+            <div style={{ marginTop: 16 }}>
+              <Link href="/login" className="btn secondary">
+                去登录
+              </Link>
             </div>
           </div>
         </main>
       </>
     );
 
-  // ---- authenticated: admin console ----
+  // ---- authenticated: unified console (manage YOUR providers) ----
   return (
     <>
-      <SiteHeader authenticated onLogout={logout} />
+      <SiteHeader authenticated role={role} onLogout={logout} />
       <main className="shell">
         <div className="detail-head" style={{ paddingTop: 40 }}>
           <div>
-            <h1 className="detail-title">后台 · 提供商配置</h1>
+            <h1 className="detail-title">控制台 · 我的提供商</h1>
             <p className="card-domain" style={{ marginTop: 10 }}>
-              添加、编辑、删除提供商，密钥加密存储，永不下发前台。
+              管理你自己的提供商，密钥加密存储、永不下发前台。
             </p>
+            <div className="admin-bar" style={{ marginTop: 12 }}>
+              {role === "admin" && (
+                <>
+                  <Link href="/admin/users" className="icon-btn">
+                    用户管理
+                  </Link>
+                  <Link href="/admin/settings" className="icon-btn">
+                    系统设置
+                  </Link>
+                  <Link href="/admin/stats" className="icon-btn">
+                    全服统计
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
           <button className="btn" onClick={openCreate}>
             + 添加提供商

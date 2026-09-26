@@ -28,6 +28,31 @@ export function categoryOf(type: ProviderType): ProviderCategory {
   return type === "native" || type === "proxy" ? "official" : "other";
 }
 
+/**
+ * Canonical form of a provider base_url — the dedup / aggregation / key-pool
+ * key (ADR-0010). Lowercase scheme+host, strip default ports, trailing `/`,
+ * a trailing `/v1`, and any query/fragment. On unparseable input, fall back to
+ * a trimmed, lowercased, de-slashed string so callers still get a stable key.
+ */
+export function normalizeBaseUrl(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const u = new URL(trimmed);
+    const scheme = u.protocol.toLowerCase();
+    const host = u.hostname.toLowerCase();
+    const isDefaultPort =
+      !u.port ||
+      (scheme === "https:" && u.port === "443") ||
+      (scheme === "http:" && u.port === "80");
+    const port = isDefaultPort ? "" : `:${u.port}`;
+    let path = u.pathname.replace(/\/+$/, ""); // drop trailing slashes
+    if (/\/v1$/i.test(path)) path = path.slice(0, -3); // drop a trailing /v1
+    return `${scheme}//${host}${port}${path}`;
+  } catch {
+    return trimmed.toLowerCase().replace(/\/+$/, "").replace(/\/v1$/i, "");
+  }
+}
+
 /** All leaf types, for iteration. */
 export const PROVIDER_TYPES: ProviderType[] = [
   "native",

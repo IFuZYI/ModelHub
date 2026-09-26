@@ -1,18 +1,42 @@
 /** Thin front-end API helpers shared across pages. */
 
-export interface AuthStatus {
-  authenticated: boolean;
-  adminConfigured: boolean;
+export interface SessionUser {
+  id: string;
+  username: string;
+  email: string | null;
+  role: "admin" | "user";
+  status: "active" | "disabled";
+  slug: string | null;
 }
 
-/** Fetch the current session/admin status. Never throws on shape. */
+export interface AuthStatus {
+  authenticated: boolean;
+  role: "admin" | "user" | "guest";
+  user: SessionUser | null;
+  adminConfigured: boolean;
+  registration_enabled: boolean;
+  personal_pages_enabled: boolean;
+}
+
+/** Fetch the current session/registration status. Never throws on shape. */
 export async function fetchAuthStatus(): Promise<AuthStatus> {
   const res = await fetch("/api/auth/status", { credentials: "same-origin" });
   const json = await res.json().catch(() => ({}));
   return {
     authenticated: Boolean(json?.authenticated),
+    role: json?.role ?? "guest",
+    user: json?.user ?? null,
     adminConfigured: Boolean(json?.adminConfigured),
+    registration_enabled: Boolean(json?.registration_enabled),
+    personal_pages_enabled: Boolean(json?.personal_pages_enabled),
   };
+}
+
+export async function logout(): Promise<void> {
+  await fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "same-origin",
+  });
 }
 
 export interface NewapiImportResult {

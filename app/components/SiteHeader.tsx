@@ -5,10 +5,11 @@ import { useTheme, toggleTheme } from "../theme";
 
 interface Props {
   authenticated: boolean;
+  role?: "admin" | "user" | "guest";
   onLogout?: () => void;
 }
 
-export default function SiteHeader({ authenticated, onLogout }: Props) {
+export default function SiteHeader({ authenticated, role = "guest", onLogout }: Props) {
   useTheme();
   return (
     <header className="site-header">
@@ -28,13 +29,15 @@ export default function SiteHeader({ authenticated, onLogout }: Props) {
           >
             ◐ 主题
           </button>
-          {/* Admin entry is intentionally hidden from public pages — reach the
-              console via the (optionally env-configured) admin path directly.
-              Only an already-authenticated session sees the 后台/退出 buttons. */}
-          {authenticated && (
+          {authenticated ? (
             <>
-              <Link href="/admin" className="icon-btn">
-                ⚙ 后台
+              {role === "admin" && (
+                <Link href="/admin" className="icon-btn">
+                  ⚙ 管理后台
+                </Link>
+              )}
+              <Link href="/console" className="icon-btn">
+                ▤ 控制台
               </Link>
               {onLogout && (
                 <button className="icon-btn" onClick={onLogout}>
@@ -42,6 +45,10 @@ export default function SiteHeader({ authenticated, onLogout }: Props) {
                 </button>
               )}
             </>
+          ) : (
+            <Link href="/login" className="icon-btn">
+              登录
+            </Link>
           )}
         </div>
       </div>
