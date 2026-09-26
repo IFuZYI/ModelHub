@@ -12,11 +12,34 @@ import type { EncryptedValue } from "../crypto";
 
 type ProviderRow = DatabaseSchema["user_providers"];
 type CacheRow = DatabaseSchema["model_caches"];
+/** Cache row without the heavy `models` JSON blob (count-only paths). */
+type CacheMetaRow = Omit<CacheRow, "models">;
+
+/** Cheap cache columns loaded on count-only paths (never the `models` blob). */
+const CACHE_META_COLUMNS = [
+  "user_provider_id",
+  "count",
+  "last_fetched",
+  "last_status",
+  "last_error",
+  "updated_at",
+] as const;
 
 /** A StoredProvider plus the id of the user who owns this mount (ADR-0010). */
 export interface OwnedProvider extends StoredProvider {
   user_id: string;
 }
+
+/**
+ * Lightweight projection of an owned provider that OMITS the (potentially large)
+ * model-name array — it carries only `model_count` from the cache's `count`
+ * column. Use this on count-only paths (console list, stats aggregation,
+ * public summaries) to avoid loading and JSON-parsing every provider's full
+ * model list on every request.
+ */
+export type OwnedProviderMeta = Omit<OwnedProvider, "models"> & {
+  model_count: number;
+};
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -27,7 +50,8 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function compose(row: ProviderRow, cache: CacheRow | undefined): OwnedProvider {
+/** Provider identity/config fields shared by full and meta projections. */
+function composeConfig(row: ProviderRow) {
   return {
     id: row.id,
     user_id: row.user_id,
@@ -43,11 +67,32 @@ function compose(row: ProviderRow, cache: CacheRow | undefined): OwnedProvider {
     manual_models: row.manual_models === 1,
     icon: row.icon,
     register_methods: parseJson<string[]>(row.register_methods, []),
+  };
+}
+
+function compose(row: ProviderRow, cache: CacheRow | undefined): OwnedProvider {
+  return {
+    ...composeConfig(row),
     models: cache ? parseJson<string[]>(cache.models, []) : [],
     last_fetched: cache?.last_fetched ?? null,
     last_status: (cache?.last_status ?? "pending") as FetchStatus,
     last_error: cache?.last_error ?? null,
     updated_at: cache?.updated_at ?? null,
+  };
+}
+
+/** Like {@link compose} but keeps only the model COUNT (no model-name array). */
+function composeMeta(
+  row: ProviderRow,
+  meta: CacheMetaRow | undefined
+): OwnedProviderMeta {
+  return {
+    ...composeConfig(row),
+    model_count: meta?.count ?? 0,
+    last_fetched: meta?.last_fetched ?? null,
+    last_status: (meta?.last_status ?? "pending") as FetchStatus,
+    last_error: meta?.last_error ?? null,
+    updated_at: meta?.updated_at ?? null,
   };
 }
 
@@ -100,6 +145,24 @@ export class UserProviderRepository {
       .executeTakeFirst();
   }
 
+  /** Compose provider rows with their count-only cache metas (shared helper). */
+  private async attachMeta(
+    rows: ProviderRow[]
+  ): Promise<OwnedProviderMeta[]> {
+    if (rows.length === 0) return [];
+    const metas = await this.db
+      .selectFrom("model_caches")
+      .select(CACHE_META_COLUMNS)
+      .where(
+        "user_provider_id",
+        "in",
+        rows.map((r) => r.id)
+      )
+      .execute();
+    const byId = new Map(metas.map((c) => [c.user_provider_id, c]));
+    return rows.map((r) => composeMeta(r, byId.get(r.id)));
+  }
+
   async listByUser(userId: string): Promise<OwnedProvider[]> {
     const rows = await this.db
       .selectFrom("user_providers")
@@ -119,11 +182,50 @@ export class UserProviderRepository {
     return rows.map((r) => compose(r, byId.get(r.id)));
   }
 
+  /**
+   * Count-only variant of {@link listByUser}: selects the cache's cheap
+   * `count`/status columns instead of the full `models` blob. Used by the
+   * console list and public summaries, which never render model names.
+   */
+  async listMetaByUser(userId: string): Promise<OwnedProviderMeta[]> {
+    const rows = await this.db
+      .selectFrom("user_providers")
+      .selectAll()
+      .where("user_id", "=", userId)
+      .execute();
+    return this.attachMeta(rows);
+  }
+
   async listAll(): Promise<OwnedProvider[]> {
     const rows = await this.db.selectFrom("user_providers").selectAll().execute();
     const caches = await this.db.selectFrom("model_caches").selectAll().execute();
     const byId = new Map(caches.map((c) => [c.user_provider_id, c]));
     return rows.map((r) => compose(r, byId.get(r.id)));
+  }
+
+  /**
+   * Count-only variant of {@link listAll}: never loads model-name blobs. Used
+   * by stats aggregation and cross-user listings, which only need counts +
+   * identity/config to bucket by normalized_base_url.
+   */
+  async listAllMeta(): Promise<OwnedProviderMeta[]> {
+    const rows = await this.db.selectFrom("user_providers").selectAll().execute();
+    return this.attachMeta(rows);
+  }
+
+  /**
+   * Count-only providers matching one normalized base_url (across all users).
+   * Lets stats recompute avoid scanning every provider on each mutation.
+   */
+  async listMetaByNormalizedUrl(
+    normalizedBaseUrl: string
+  ): Promise<OwnedProviderMeta[]> {
+    const rows = await this.db
+      .selectFrom("user_providers")
+      .selectAll()
+      .where("normalized_base_url", "=", normalizedBaseUrl)
+      .execute();
+    return this.attachMeta(rows);
   }
 
   async getById(id: string): Promise<OwnedProvider | undefined> {

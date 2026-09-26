@@ -89,8 +89,9 @@ export default function LoginPage() {
             </p>
             <form onSubmit={submitCode} className="auth-form">
               <div className="field">
-                <label>验证码</label>
+                <label htmlFor="auth-code">验证码</label>
                 <input
+                  id="auth-code"
                   value={code}
                   onChange={(ev) => setCode(ev.target.value)}
                   inputMode="numeric"
@@ -128,8 +129,9 @@ export default function LoginPage() {
           </h1>
           <form onSubmit={submit} className="auth-form">
             <div className="field">
-              <label>用户名</label>
+              <label htmlFor="auth-username">用户名</label>
               <input
+                id="auth-username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
@@ -138,8 +140,9 @@ export default function LoginPage() {
             </div>
             {mode === "register" && (
               <div className="field">
-                <label>邮箱（可选）</label>
+                <label htmlFor="auth-email">邮箱（可选）</label>
                 <input
+                  id="auth-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -148,8 +151,9 @@ export default function LoginPage() {
               </div>
             )}
             <div className="field">
-              <label>密码</label>
+              <label htmlFor="auth-password">密码</label>
               <input
+                id="auth-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

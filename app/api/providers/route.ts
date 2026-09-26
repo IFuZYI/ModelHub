@@ -11,8 +11,12 @@ import {
 export const dynamic = "force-dynamic";
 
 // Public homepage list = the primary admin's providers (summaries, no keys).
+// Short private cache smooths repeated loads without risking cross-user leakage
+// (payload is identical for every guest; authenticated users see the same list).
 export const GET = withErrorHandling(async () => {
-  return NextResponse.json(await publicService.homepage());
+  return NextResponse.json(await publicService.homepage(), {
+    headers: { "Cache-Control": "public, max-age=30, stale-while-revalidate=60" },
+  });
 });
 
 // Authenticated: create a provider owned by the current user.

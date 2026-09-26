@@ -131,6 +131,14 @@ export function createDatabase(options: DatabaseOptions = {}): AppDatabase {
   const sqlite = new Database(sqlitePath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  // Lower disk/CPU overhead for this read-heavy workload:
+  //  - synchronous=NORMAL is durable under WAL and avoids an fsync per commit.
+  //  - busy_timeout lets the periodic refresh and request reads share the DB
+  //    without spurious SQLITE_BUSY errors.
+  //  - a bounded negative cache_size caps the page cache at ~8 MB (footprint).
+  sqlite.pragma("synchronous = NORMAL");
+  sqlite.pragma("busy_timeout = 5000");
+  sqlite.pragma("cache_size = -8000");
   return new Kysely<DatabaseSchema>({ dialect: new SqliteDialect({ database: sqlite }) });
 }
 

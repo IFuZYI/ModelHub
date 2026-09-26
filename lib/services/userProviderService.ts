@@ -14,6 +14,7 @@ import { getDatabase } from "../infra/db";
 import {
   UserProviderRepository,
   type OwnedProvider,
+  type OwnedProviderMeta,
 } from "../infra/repositories/userProviderRepo";
 import { UserRepository } from "../infra/repositories/userRepo";
 import { keyPoolService, KeyPoolService } from "./keyPoolService";
@@ -44,6 +45,11 @@ export interface UserProviderView {
 }
 
 function toView(p: OwnedProvider): UserProviderView {
+  return metaToView({ ...p, model_count: p.models.length });
+}
+
+/** Build a view from the count-only meta projection (no model-name blob). */
+function metaToView(p: OwnedProviderMeta): UserProviderView {
   return {
     id: p.id,
     name: p.name,
@@ -59,7 +65,7 @@ function toView(p: OwnedProvider): UserProviderView {
     manual_models: p.manual_models,
     register_methods: p.register_methods,
     invite_url: buildInviteUrl(p.base_url, p.aff_code),
-    model_count: p.models.length,
+    model_count: p.model_count,
     last_status: p.last_status,
     last_error: p.last_error,
     last_fetched: p.last_fetched,
@@ -112,7 +118,7 @@ export class UserProviderService {
   }
 
   async listByUser(userId: string): Promise<UserProviderView[]> {
-    return (await this.repo.listByUser(userId)).map(toView);
+    return (await this.repo.listMetaByUser(userId)).map(metaToView);
   }
 
   async getOwned(userId: string, id: string): Promise<OwnedProvider> {

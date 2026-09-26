@@ -1,11 +1,13 @@
 import type { AppDatabase } from "./db";
 import { migration0001Init } from "../../migrations/0001_init";
 import { migration0002EmailVerifications } from "../../migrations/0002_email_verifications";
+import { migration0003PerfIndexes } from "../../migrations/0003_perf_indexes";
 
 /** All migrations in version order. */
 export const migrations = [
   migration0001Init,
   migration0002EmailVerifications,
+  migration0003PerfIndexes,
 ] as const;
 
 /**

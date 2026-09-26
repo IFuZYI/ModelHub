@@ -145,7 +145,7 @@ export default function ConsolePage() {
           <div className="empty">
             还没有提供商。
             <div style={{ marginTop: 16 }}>
-              <Link href="/admin/providers/new" className="btn secondary">
+              <Link href="/admin" className="btn secondary">
                 添加第一个
               </Link>
             </div>

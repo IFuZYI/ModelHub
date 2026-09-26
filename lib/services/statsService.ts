@@ -34,9 +34,8 @@ export class StatsService {
 
   /** Recompute the aggregate row for one base_url from all users' configs. */
   async recompute(normalizedBaseUrl: string): Promise<void> {
-    const all = await this.providers.listAll();
-    const matching = all.filter(
-      (p) => normalizeBaseUrl(p.base_url) === normalizedBaseUrl
+    const matching = await this.providers.listMetaByNormalizedUrl(
+      normalizedBaseUrl
     );
     if (matching.length === 0) {
       await this.stats.remove(normalizedBaseUrl);
@@ -61,7 +60,7 @@ export class StatsService {
     const [stats, admins, allProviders] = await Promise.all([
       this.stats.list(),
       this.users.list().then((us) => us.filter((u) => u.role === "admin")),
-      this.providers.listAll(),
+      this.providers.listAllMeta(),
     ]);
     const adminIds = new Set(admins.map((a) => a.id));
     const adminUrls = new Set(
