@@ -56,6 +56,28 @@ describe("importNewapiSite", () => {
     expect(r.icon).toBe(`${base}/logo.png`);
   });
 
+  it("falls back to {origin}/logo.png when the site has no logo configured", async () => {
+    // Site whose /api/status omits `logo` — should still get the convention default.
+    const noLogo = http.createServer((req, res) => {
+      if (req.url?.endsWith("/api/status")) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(
+          JSON.stringify({ success: true, data: { system_name: "No Logo" } })
+        );
+      }
+      res.writeHead(404);
+      res.end("x");
+    });
+    await new Promise<void>((r) => noLogo.listen(0, "127.0.0.1", () => r()));
+    const nlBase = `http://127.0.0.1:${(noLogo.address() as { port: number }).port}`;
+    try {
+      const r = await importNewapiSite(`${nlBase}/`);
+      expect(r.icon).toBe(`${nlBase}/logo.png`);
+    } finally {
+      await new Promise<void>((r) => noLogo.close(() => r()));
+    }
+  });
+
   it("detects sign-up / login methods from /api/status", async () => {
     const r = await importNewapiSite(`${base}/`);
     expect(r.register_methods).toContain("密码注册（需邮箱验证）");

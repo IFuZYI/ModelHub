@@ -108,13 +108,15 @@ export async function importNewapiSite(
         const sn = p.data.data?.system_name?.trim();
         name = sn && sn.length ? sn : null;
         // logo may be absolute (https://...) or site-relative (/logo.png).
+        // When a site hasn't configured its own logo, newapi serves the
+        // convention default at {origin}/logo.png — fall back to that so the
+        // avatar still renders instead of the name initial.
         const rawLogo = p.data.data?.logo?.trim();
-        if (rawLogo) {
-          try {
-            icon = new URL(rawLogo, base_url).href;
-          } catch {
-            icon = null;
-          }
+        const logoRef = rawLogo && rawLogo.length ? rawLogo : "/logo.png";
+        try {
+          icon = new URL(logoRef, base_url).href;
+        } catch {
+          icon = null;
         }
         register_methods = extractRegisterMethods(
           p.data.data as Record<string, unknown> | undefined
