@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo, use } from "react";
 import Link from "next/link";
 import SiteHeader from "../../components/SiteHeader";
 import ProviderAvatar from "../../components/ProviderAvatar";
-import { TypeBadge } from "../../components/badges";
+import { TypeBadge, FreeBadge } from "../../components/badges";
 import { modelVendor, vendorLabel } from "../../lib/display";
 import { fetchAuthStatus } from "../../lib/api";
 import type { PublicProviderView } from "@/lib";
@@ -129,10 +129,14 @@ export default function ProviderDetail({
               <ProviderAvatar name={p.name} icon={p.icon} />
               {p.name}
               <TypeBadge type={p.type} />
+              {p.free && <FreeBadge />}
             </h1>
             <p className="card-domain" style={{ marginTop: 10 }}>
               {p.base_url}
             </p>
+            {p.description && (
+              <p className="detail-desc">{p.description}</p>
+            )}
           </div>
         </div>
 

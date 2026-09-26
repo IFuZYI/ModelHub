@@ -18,16 +18,6 @@ const baseUrlSchema = z
     message: "base_url must use http or https",
   });
 
-// Official website URL. Optional: an empty string clears it; otherwise it must
-// be a valid http(s) URL (may be a homepage or a deep console path).
-const siteUrlSchema = z
-  .string()
-  .trim()
-  .max(300)
-  .refine((u) => u === "" || /^https?:\/\/.+/i.test(u), {
-    message: "site_url must be empty or a valid http/https URL",
-  });
-
 // newapi invite/referral code — appended as ?aff=<code>. Optional.
 const affCodeSchema = z
   .string()
@@ -51,33 +41,35 @@ const adapterSchema = z
     message: "unknown adapter",
   });
 
-// models.dev catalog slug (api.json top-level key). Optional; letters, digits,
-// dots, hyphens, underscores, slashes and tildes cover every known slug.
-const modelsDevSlugSchema = z
+// Catalog value: either a provider slug (models.dev key, LiteLLM provider,
+// spullara vendor name) or a full http(s) URL to a compatible model list.
+// Slug charset covers every known slug; URLs are allowed up to 300 chars.
+const catalogSlugValue = z
   .string()
   .trim()
-  .max(80)
-  .regex(/^[A-Za-z0-9._~/-]*$/, "models_dev_slug has invalid characters");
+  .max(300)
+  .refine(
+    (v) => /^https?:\/\/.+/i.test(v) || /^[A-Za-z0-9._~/-]*$/.test(v),
+    "catalog slug must be a provider slug or an http/https URL"
+  );
 
-// LLMRates dataset provider slug (e.g. "openai", "volcano-ark"). Optional.
-const llmratesSlugSchema = z
-  .string()
-  .trim()
-  .max(80)
-  .regex(/^[A-Za-z0-9._~/-]*$/, "llmrates_slug has invalid characters");
+// catalog_slugs: adapter id → slug. Adapter ids are validated in the service.
+const catalogSlugsSchema = z.record(z.string(), catalogSlugValue);
+
+// Optional provider description shown on the detail page.
+const descriptionSchema = z.string().trim().max(500);
 
 export const createProviderSchema = z.object({
   name: z.string().trim().min(1, "name is required").max(100),
+  description: descriptionSchema.optional(),
   type: providerTypeSchema,
   base_url: baseUrlSchema,
   aff_code: affCodeSchema.optional(),
   adapter: adapterSchema.optional(),
-  // Official website URL shown as the "前往官网" link (optional).
-  site_url: siteUrlSchema.optional(),
-  // models.dev catalog slug for the models-dev adapter (optional).
-  models_dev_slug: modelsDevSlugSchema.optional(),
-  // LLMRates dataset provider slug for the llmrates adapter (optional).
-  llmrates_slug: llmratesSlugSchema.optional(),
+  // Whether this provider offers a free tier / free tokens (optional).
+  free: z.boolean().optional(),
+  // Per-source catalog slugs (adapter id → slug) for no-key model sync.
+  catalog_slugs: catalogSlugsSchema.optional(),
   // key is OPTIONAL: relays that expose a public /api/pricing need no auth.
   key: z.string().trim().max(500).optional(),
   // Built-in model list to seed a preset-based provider (optional).
@@ -93,16 +85,16 @@ export const createProviderSchema = z.object({
 export const updateProviderSchema = z
   .object({
     name: z.string().trim().min(1).max(100).optional(),
+    // description: empty string clears, a value sets, undefined preserves
+    description: descriptionSchema.optional(),
     type: providerTypeSchema.optional(),
     base_url: baseUrlSchema.optional(),
     aff_code: affCodeSchema.optional(),
     adapter: adapterSchema.optional(),
-    // site_url: empty string clears, a value sets, undefined preserves
-    site_url: siteUrlSchema.optional(),
-    // models_dev_slug: empty string clears, a value sets, undefined preserves
-    models_dev_slug: modelsDevSlugSchema.optional(),
-    // llmrates_slug: empty string clears, a value sets, undefined preserves
-    llmrates_slug: llmratesSlugSchema.optional(),
+    // free: toggle the free-tier flag
+    free: z.boolean().optional(),
+    // catalog_slugs: replaces the stored map when provided
+    catalog_slugs: catalogSlugsSchema.optional(),
     // Empty key explicitly clears the stored credential; omission preserves it.
     key: z.string().trim().max(500).optional(),
     // icon: empty string clears, a value sets, undefined leaves unchanged

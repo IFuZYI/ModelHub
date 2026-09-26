@@ -810,6 +810,13 @@ main {
 .badge.custom {
   color: var(--text-3);
 }
+.badge.free-tag {
+  color: #0a7d2e;
+  background: rgba(34, 197, 94, 0.16);
+  box-shadow: none;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 .status {
   display: inline-flex;
   align-items: center;
@@ -957,6 +964,13 @@ main {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+.detail-desc {
+  margin: 12px 0 0;
+  max-width: 640px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-2);
 }
 .model-list {
   display: grid;
@@ -1160,12 +1174,100 @@ main {
   margin-top: 24px;
 }
 
+/* ---------- collapsible field group (progressive disclosure) ---------- */
+.field-group {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  padding: 0 14px;
+}
+.field-group[open] {
+  padding-bottom: 4px;
+}
+.field-group > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 13px 0;
+  font: 500 13px/1 var(--mono);
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.field-group > summary::-webkit-details-marker {
+  display: none;
+}
+.field-group > summary::before {
+  content: "›";
+  display: inline-block;
+  font-size: 15px;
+  color: var(--text-3);
+  transition: transform 0.15s ease;
+}
+.field-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+.field-group .field:last-child {
+  margin-bottom: 8px;
+}
+
+/* ---------- side-by-side fields (type + free flag) ---------- */
+.field-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.field-row > .field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- free-tier toggle button (matches the type Select size) ---------- */
+.free-toggle {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+.free-toggle:hover {
+  border-color: var(--line-2);
+  color: var(--text);
+}
+/* On = highlighted with the inverted accent (white-on-black), monochrome. */
+.free-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.free-toggle:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--line-3);
+}
+
 /* ---------- add-provider flows (choice menu, presets, hints) ---------- */
 .field-hint {
   margin: -6px 0 4px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-4);
+}
+/* When the hint sits inside a .field (below its input), give it top spacing
+   instead of the negative pull used for standalone hints. */
+.field .field-hint {
+  margin: 7px 0 0;
 }
 .field-hint code {
   font: 500 11px/1 var(--mono);

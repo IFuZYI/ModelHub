@@ -199,18 +199,35 @@ describe("ProviderService", () => {
     expect(updated.last_status).toBe("ok");
   });
 
-  it("persists models_dev_slug on create and clears it on update", async () => {
+  it("persists catalog_slugs on create and replaces them on update", async () => {
     const s = svc();
     const created = await s.create({
       name: "MD",
       type: "native",
       base_url: base,
       adapter: "openai-compatible",
-      models_dev_slug: "openai",
+      catalog_slugs: { "models-dev": "openai", spullara: "openai" },
     });
-    expect(created.models_dev_slug).toBe("openai");
+    expect(created.catalog_slugs).toEqual({
+      "models-dev": "openai",
+      spullara: "openai",
+    });
 
-    const cleared = await s.update(created.id, { models_dev_slug: "" });
-    expect(cleared.models_dev_slug).toBeNull();
+    const cleared = await s.update(created.id, { catalog_slugs: {} });
+    expect(cleared.catalog_slugs).toEqual({});
+  });
+
+  it("persists the free flag and lets an update toggle it", async () => {
+    const s = svc();
+    const created = await s.create({
+      name: "FreeCo",
+      type: "native",
+      base_url: base,
+      free: true,
+    });
+    expect(created.free).toBe(true);
+
+    const off = await s.update(created.id, { free: false });
+    expect(off.free).toBe(false);
   });
 });

@@ -10,10 +10,12 @@ export interface UpstreamRequest {
 
 /** Extra per-provider context an adapter may need to build its attempts. */
 export interface UpstreamAttemptOptions {
-  /** models.dev provider slug (for the models-dev adapter). */
-  modelsDevSlug?: string | null;
-  /** LLMRates dataset provider slug (for the llmrates adapter). */
-  llmratesSlug?: string | null;
+  /**
+   * The catalog slug for this provider under the adapter being invoked — the
+   * key/provider name the no-key catalog sources look up (e.g. models.dev's
+   * "openai", LiteLLM's "together_ai", spullara's "grok"). Null when unused.
+   */
+  catalogSlug?: string | null;
 }
 
 export interface UpstreamAdapter {
@@ -43,4 +45,10 @@ export interface UpstreamAttempt {
   request: UpstreamRequest;
   /** Parse this attempt's JSON into a flat list of model ids (unsorted). */
   parse(json: unknown): string[];
+  /**
+   * Optional: parse a text/plain response body into model ids. When present,
+   * the fetcher reads the body as text and calls this instead of `parse`
+   * (used by sources that serve newline-delimited lists, e.g. spullara).
+   */
+  parseText?(body: string): string[];
 }

@@ -7,15 +7,7 @@ const catalog = {
   openai: {
     id: "openai",
     name: "OpenAI",
-    models: {
-      "gpt-4o": { id: "gpt-4o" },
-      "o3": { id: "o3" },
-    },
-  },
-  anthropic: {
-    id: "anthropic",
-    name: "Anthropic",
-    models: { "claude-opus-4-8": { id: "claude-opus-4-8" } },
+    models: { "gpt-4o": { id: "gpt-4o" }, o3: { id: "o3" } },
   },
   empty: { id: "empty", name: "Empty" },
 };
@@ -28,7 +20,7 @@ describe("modelsDevAdapter", () => {
 
   it("hits the models.dev api.json url once", () => {
     const attempts = modelsDevAdapter.buildAttempts("", null, {
-      modelsDevSlug: "openai",
+      catalogSlug: "openai",
     });
     expect(attempts).toHaveLength(1);
     expect(attempts[0].request.url).toBe(MODELS_DEV_API_URL);
@@ -36,33 +28,33 @@ describe("modelsDevAdapter", () => {
 
   it("returns the model ids for the given slug", () => {
     const [attempt] = modelsDevAdapter.buildAttempts("", null, {
-      modelsDevSlug: "openai",
+      catalogSlug: "openai",
     });
     expect(attempt.parse(catalog).sort()).toEqual(["gpt-4o", "o3"]);
   });
 
   it("returns an empty list for a slug with no models (falls through)", () => {
     const [attempt] = modelsDevAdapter.buildAttempts("", null, {
-      modelsDevSlug: "empty",
+      catalogSlug: "empty",
     });
     expect(attempt.parse(catalog)).toEqual([]);
   });
 
   it("throws when the slug is missing", () => {
     const [attempt] = modelsDevAdapter.buildAttempts("", null, {});
-    expect(() => attempt.parse(catalog)).toThrow(/models_dev_slug/);
+    expect(() => attempt.parse(catalog)).toThrow(/requires a slug/);
   });
 
   it("throws when the slug is absent from the catalog", () => {
     const [attempt] = modelsDevAdapter.buildAttempts("", null, {
-      modelsDevSlug: "does-not-exist",
+      catalogSlug: "does-not-exist",
     });
     expect(() => attempt.parse(catalog)).toThrow(/does-not-exist/);
   });
 
   it("throws on a malformed catalog shape", () => {
     const [attempt] = modelsDevAdapter.buildAttempts("", null, {
-      modelsDevSlug: "openai",
+      catalogSlug: "openai",
     });
     expect(() => attempt.parse([1, 2, 3])).toThrow(/models.dev/);
   });

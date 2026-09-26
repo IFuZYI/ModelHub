@@ -209,7 +209,7 @@ async function migrateLegacyIfNeeded(): Promise<void> {
   };
   const now = new Date().toISOString();
   for (const lp of legacy.providers) {
-    const stored: StoredProvider = { ...lp, updated_at: now };
+    const stored = { ...lp, updated_at: now } as StoredProvider;
     const { config: cfg, cache } = splitProvider(stored);
     byCategory[categoryOf(cfg.type)].push(cfg);
     await writeCache(cache);

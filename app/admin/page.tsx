@@ -15,6 +15,8 @@ import type { OfficialPreset } from "@/lib/domain/presets";
 interface FormState {
   id?: string;
   name: string;
+  /** Optional human description of the provider. */
+  description: string;
   type: ProviderType;
   base_url: string;
   aff_code: string;
@@ -25,20 +27,43 @@ interface FormState {
   models: string[];
   /** True for presets whose models are manual (no live listing). */
   manual_models: boolean;
-  /** Official website URL shown as the "前往官网" link. */
-  site_url: string;
-  /** models.dev catalog slug for the models-dev adapter (empty = unused). */
-  models_dev_slug: string;
-  /** LLMRates dataset provider slug for the llmrates adapter (empty = unused). */
-  llmrates_slug: string;
+  /** Whether this provider offers a free tier / free tokens (FREE tag). */
+  free: boolean;
+  /** Per-source catalog slugs (adapter id → slug) for no-key model sync. */
+  catalog_slugs: Record<string, string>;
   /** Upstream adapter id (empty = server default openai-compatible). */
   adapter: string;
   /** Sign-up / login methods (NewAPI sites). */
   register_methods: string[];
 }
 
+/** Catalog slug inputs shown for official providers (adapter id + labels). */
+const CATALOG_SLUG_FIELDS: {
+  id: string;
+  label: string;
+  placeholder: string;
+}[] = [
+  {
+    id: "spullara",
+    label: "模型接口",
+    placeholder:
+      "如 openai，或完整链接 https://raw.githubusercontent.com/spullara/models/refs/heads/main/openai.txt",
+  },
+  {
+    id: "models-dev",
+    label: "models.dev 目录 slug",
+    placeholder: "如 openai、anthropic、google、openrouter",
+  },
+  {
+    id: "litellm",
+    label: "LiteLLM 目录 slug",
+    placeholder: "如 openai、together_ai、vercel_ai_gateway",
+  },
+];
+
 const EMPTY_FORM: FormState = {
   name: "",
+  description: "",
   type: "native",
   base_url: "",
   aff_code: "",
@@ -46,9 +71,8 @@ const EMPTY_FORM: FormState = {
   icon: "",
   models: [],
   manual_models: false,
-  site_url: "",
-  models_dev_slug: "",
-  llmrates_slug: "",
+  free: false,
+  catalog_slugs: {},
   adapter: "",
   register_methods: [],
 };
@@ -152,6 +176,7 @@ export default function AdminPage() {
     setForm({
       id: p.id,
       name: p.name,
+      description: p.description ?? "",
       type: p.type,
       base_url: p.base_url,
       aff_code: p.aff_code ?? "",
@@ -159,9 +184,8 @@ export default function AdminPage() {
       icon: p.icon ?? "",
       models: p.models,
       manual_models: p.manual_models,
-      site_url: p.site_url ?? "",
-      models_dev_slug: p.models_dev_slug ?? "",
-      llmrates_slug: p.llmrates_slug ?? "",
+      free: p.free ?? false,
+      catalog_slugs: { ...(p.catalog_slugs ?? {}) },
       adapter: p.adapter ?? "",
       register_methods: p.register_methods ?? [],
     });
@@ -183,6 +207,7 @@ export default function AdminPage() {
       const r = await importNewapiSite(importUrl);
       setForm({
         name: r.name ?? "",
+        description: "",
         type: "newapi",
         base_url: r.base_url,
         aff_code: r.aff_code ?? "",
@@ -190,9 +215,8 @@ export default function AdminPage() {
         icon: r.icon ?? "",
         models: [],
         manual_models: false,
-        site_url: "",
-        models_dev_slug: "",
-        llmrates_slug: "",
+        free: false,
+        catalog_slugs: {},
         adapter: "",
         register_methods: r.register_methods ?? [],
       });
@@ -216,6 +240,7 @@ export default function AdminPage() {
   function pickPreset(preset: OfficialPreset) {
     setForm({
       name: preset.name,
+      description: preset.description ?? "",
       type: preset.type,
       base_url: preset.base_url,
       aff_code: "",
@@ -223,13 +248,8 @@ export default function AdminPage() {
       icon: faviconUrl(preset.domain),
       models: preset.models,
       manual_models: preset.manual_models ?? false,
-      site_url: preset.site_url ?? "",
-      models_dev_slug: preset.models_dev_slug ?? "",
-      llmrates_slug: preset.llmrates_slug ?? "",
-      // Catalog slugs are FALLBACKS, not the primary source: keep the live
-      // adapter (openai-compatible, unless the preset forces one) so a keyed
-      // fetch uses the real API, and the fetcher falls back to models.dev /
-      // LLMRates only when the live listing fails or there's no key.
+      free: preset.free ?? false,
+      catalog_slugs: { ...(preset.catalog_slugs ?? {}) },
       adapter: preset.adapter ?? "",
       register_methods: [],
     });
@@ -262,29 +282,26 @@ export default function AdminPage() {
       const url = isEdit ? `/api/providers/${form.id}` : "/api/providers";
       const body: Record<string, unknown> = {
         name: form.name,
+        description: form.description.trim(),
         type: form.type,
-        base_url: form.base_url,
+        base_url: form.base_url.trim(),
         // always send aff_code so clearing it on edit works ("" clears)
         aff_code: form.aff_code.trim(),
       };
       // On edit, omit an unchanged key; an explicit clear is a separate action.
       if (!isEdit || form.key) body.key = form.key;
-      // site_url: official website link. On edit always send so clearing works.
-      if (!isEdit) {
-        if (form.site_url.trim()) body.site_url = form.site_url.trim();
-      } else {
-        body.site_url = form.site_url.trim();
-      }
-      // Adapter + models.dev/LLMRates slug: carry them so a catalog-backed
-      // provider syncs from the chosen source. On edit, always send so clearing
-      // works.
+      // free: always send the flag so toggling it off on edit persists.
+      body.free = form.free;
       if (form.adapter) body.adapter = form.adapter;
-      if (!isEdit) {
-        if (form.models_dev_slug) body.models_dev_slug = form.models_dev_slug;
-        if (form.llmrates_slug) body.llmrates_slug = form.llmrates_slug;
-      } else {
-        body.models_dev_slug = form.models_dev_slug.trim();
-        body.llmrates_slug = form.llmrates_slug.trim();
+      // catalog_slugs: keep only non-empty entries. On edit always send (even
+      // when empty) so cleared slugs persist.
+      const slugs = Object.fromEntries(
+        Object.entries(form.catalog_slugs)
+          .map(([id, v]) => [id, v.trim()])
+          .filter(([, v]) => v)
+      );
+      if (isEdit || Object.keys(slugs).length > 0) {
+        body.catalog_slugs = slugs;
       }
       // On create, carry the preset's built-in model list + manual flag.
       // For custom/newapi providers the user may edit the model list too.
@@ -809,66 +826,78 @@ export default function AdminPage() {
                       />
                     </div>
                   </div>
-                  {/* Type is only editable when editing; new providers keep the
-                      type chosen in the flow above. */}
-                  {form.id && (
+                  {/* Type (edit only) + FREE flag share a row. New providers
+                      keep the type chosen in the flow above, so FREE goes solo. */}
+                  <div className="field-row">
+                    {form.id && (
+                      <div className="field">
+                        <label>类型</label>
+                        <Select
+                          ariaLabel="提供商类型"
+                          value={form.type}
+                          onChange={(v) =>
+                            setForm({ ...form, type: v as ProviderType })
+                          }
+                          options={[
+                            { value: "native", label: "官方·原生" },
+                            { value: "proxy", label: "官方·中转" },
+                            { value: "newapi", label: "NewAPI" },
+                            { value: "custom", label: "其他 / 自建" },
+                          ]}
+                        />
+                      </div>
+                    )}
+                    {/* FREE flag: single toggle button, NO by default. */}
                     <div className="field">
-                      <label>类型</label>
-                      <Select
-                        ariaLabel="提供商类型"
-                        value={form.type}
-                        onChange={(v) =>
-                          setForm({ ...form, type: v as ProviderType })
-                        }
-                        options={[
-                          { value: "native", label: "官方·原生" },
-                          { value: "proxy", label: "官方·中转" },
-                          { value: "newapi", label: "NewAPI" },
-                          { value: "custom", label: "其他 / 自建" },
-                        ]}
-                      />
+                      <label>免费额度</label>
+                      <button
+                        type="button"
+                        className={`free-toggle ${form.free ? "on" : ""}`}
+                        aria-pressed={form.free}
+                        onClick={() => setForm({ ...form, free: !form.free })}
+                      >
+                        {form.free ? "FREE" : "NO"}
+                      </button>
                     </div>
-                  )}
+                  </div>
                   <div className="field">
-                    <label>Base URL（不带 /v1）</label>
+                    <label>官网地址</label>
                     <input
                       value={form.base_url}
                       onChange={(e) =>
                         setForm({ ...form, base_url: e.target.value })
                       }
-                      placeholder="https://api.openai.com"
+                      placeholder="https://openai.com"
                       required
                     />
                   </div>
-                  {/* 官网地址：用户点「前往官网」跳转的落地页，与 API 地址区分。 */}
                   <div className="field">
-                    <label>官网地址（可选，用户点“前往官网”跳转，留空则用 Base URL）</label>
-                    <input
-                      value={form.site_url}
+                    <label>描述（可选）</label>
+                    <textarea
+                      className="model-textarea"
+                      value={form.description}
                       onChange={(e) =>
-                        setForm({ ...form, site_url: e.target.value })
+                        setForm({ ...form, description: e.target.value })
                       }
-                      placeholder="https://openai.com"
+                      placeholder="一句话介绍这个提供商，展示在详情页。"
+                      rows={2}
                     />
                   </div>
                   {form.type === "newapi" && (
                     <div className="field">
-                      <label>邀请码 aff（可选，NewAPI 站点用）</label>
+                      <label>邀请码 aff（可选）</label>
                       <input
                         value={form.aff_code}
                         onChange={(e) =>
                           setForm({ ...form, aff_code: e.target.value })
                         }
-                        placeholder="如 XXX，将拼接为 站点?aff=XXX"
+                        placeholder="如 XXX"
                       />
                     </div>
                   )}
-                  {/* 自定义模型：其他/自建，或任何抓取不到模型的场景手动补充。 */}
                   {(form.type === "custom" || form.type === "newapi") && (
                     <div className="field">
-                      <label>
-                        自定义模型（可选，每行一个；填写后视为固定列表，不再自动抓取覆盖）
-                      </label>
+                      <label>自定义模型（可选，每行一个）</label>
                       <textarea
                         className="model-textarea"
                         value={form.models.join("\n")}
@@ -888,53 +917,43 @@ export default function AdminPage() {
                       />
                     </div>
                   )}
-                  <div className="field">
-                    <label>
-                      API Key（
-                      {form.type === "newapi"
-                        ? "可选，公开 /api/pricing 可不填"
-                        : "通常必填"}
-                      {form.id ? "；留空不修改已存密钥" : ""}）
-                    </label>
-                    <input
-                      type="password"
-                      value={form.key}
-                      onChange={(e) =>
-                        setForm({ ...form, key: e.target.value })
-                      }
-                      placeholder="sk-...（可留空）"
-                    />
-                  </div>
-                  {/* models.dev 目录同步：填写 slug 后用 models-dev 适配器
-                      从公共目录抓取模型列表，无需 API Key。 */}
-                  <div className="field">
-                    <label>
-                      models.dev 目录 slug（可选，填写后从 models.dev 同步模型，无需
-                      Key）
-                    </label>
-                    <input
-                      value={form.models_dev_slug}
-                      onChange={(e) =>
-                        setForm({ ...form, models_dev_slug: e.target.value })
-                      }
-                      placeholder="如 openai、anthropic、google、openrouter"
-                    />
-                  </div>
-                  {/* LLMRates 数据集同步：models.dev 缺失的厂商（如
-                      SambaNova、Perplexity）可用它，无需 API Key。 */}
-                  <div className="field">
-                    <label>
-                      LLMRates 数据集 slug（可选，models.dev
-                      缺的厂商用它同步模型，无需 Key）
-                    </label>
-                    <input
-                      value={form.llmrates_slug}
-                      onChange={(e) =>
-                        setForm({ ...form, llmrates_slug: e.target.value })
-                      }
-                      placeholder="如 sambanova、perplexity、volcano-ark"
-                    />
-                  </div>
+                  {/* Advanced settings (API Key + model sync sources), always
+                      collapsed by default. Field docs: docs/PROVIDER_FORM.md. */}
+                  <details className="field-group">
+                    <summary>高级设置（API Key、模型同步来源）</summary>
+                    <div className="field">
+                      <label>
+                        API Key{form.type === "newapi" ? "（可选）" : ""}
+                      </label>
+                      <input
+                        type="password"
+                        value={form.key}
+                        onChange={(e) =>
+                          setForm({ ...form, key: e.target.value })
+                        }
+                        placeholder="sk-...（可留空）"
+                      />
+                    </div>
+                    {(form.type === "native" || form.type === "proxy") &&
+                      CATALOG_SLUG_FIELDS.map((f) => (
+                        <div className="field" key={f.id}>
+                          <label>{f.label}</label>
+                          <input
+                            value={form.catalog_slugs[f.id] ?? ""}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                catalog_slugs: {
+                                  ...form.catalog_slugs,
+                                  [f.id]: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder={f.placeholder}
+                          />
+                        </div>
+                      ))}
+                  </details>
                   {formErr && <div className="error-box">{formErr}</div>}
                   <div className="modal-actions">
                     <button

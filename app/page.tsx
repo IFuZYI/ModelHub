@@ -5,7 +5,7 @@ import Link from "next/link";
 import SiteHeader from "./components/SiteHeader";
 import Select from "./components/Select";
 import ProviderAvatar from "./components/ProviderAvatar";
-import { TypeBadge } from "./components/badges";
+import { TypeBadge, FreeBadge } from "./components/badges";
 import { hostOf, categoryOf } from "./lib/display";
 import { fetchAuthStatus } from "./lib/api";
 import { ProviderView } from "@/lib";
@@ -175,6 +175,7 @@ export default function Home() {
                 </div>
                 <div className="card-bottom">
                   <TypeBadge type={p.type} />
+                  {p.free && <FreeBadge />}
                   <span className="card-tag">{p.model_count} 模型</span>
                   {p.aff_code && <span className="card-tag">邀请码</span>}
                 </div>

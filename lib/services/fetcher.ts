@@ -58,6 +58,11 @@ async function runAttempt(
         }
         throw AppError.upstream(msg, { status: res.status });
       }
+      // Text sources (e.g. spullara) serve newline-delimited lists, not JSON.
+      if (attempt.parseText) {
+        const body = await res.text();
+        return attempt.parseText(body);
+      }
       // Guard non-JSON / malformed bodies with a clear, terminal error.
       let json: unknown;
       try {
@@ -128,8 +133,7 @@ export async function fetchProviderModels(
     adapter: provider.adapter,
     baseUrl: provider.base_url,
     key,
-    modelsDevSlug: provider.models_dev_slug,
-    llmratesSlug: provider.llmrates_slug,
+    catalogSlugs: provider.catalog_slugs,
   });
 
   const errors: string[] = [];

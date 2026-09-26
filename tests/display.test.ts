@@ -101,13 +101,13 @@ describe("toPublicView", () => {
   const provider: StoredProvider = {
     id: "11111111-1111-1111-1111-111111111111",
     name: "Example",
+    description: null,
     type: "native",
     base_url: "https://example.com",
     aff_code: null,
     adapter: "openai-compatible",
-    site_url: null,
-    models_dev_slug: null,
-    llmrates_slug: null,
+    free: false,
+    catalog_slugs: {},
     key_enc: null,
     manual_models: false,
     icon: null,
@@ -126,6 +126,11 @@ describe("toPublicView", () => {
     expect(view).not.toHaveProperty("last_fetched");
     expect(view).not.toHaveProperty("updated_at");
     expect(view).not.toHaveProperty("has_key");
+  });
+
+  it("carries the free-tier flag through to the public view", () => {
+    expect(toPublicView({ ...provider, free: true }).free).toBe(true);
+    expect(toPublicView({ ...provider, free: false }).free).toBe(false);
   });
 });
 

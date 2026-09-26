@@ -1,8 +1,10 @@
-import { DEFAULT_ADAPTER } from "../domain/provider";
+import { DEFAULT_ADAPTER, CATALOG_ADAPTERS } from "../domain/provider";
+import type { CatalogAdapterId, CatalogSlugs } from "../domain/provider";
 import type { UpstreamAdapter, UpstreamAttempt } from "./types";
 import { openaiCompatibleAdapter } from "./openaiCompatible";
 import { modelsDevAdapter } from "./modelsDev";
-import { llmratesAdapter } from "./llmrates";
+import { litellmAdapter } from "./litellm";
+import { spullaraAdapter } from "./spullara";
 
 /**
  * Adapter registry. Register new upstream protocols here; everything else
@@ -16,7 +18,8 @@ export function registerAdapter(adapter: UpstreamAdapter): void {
 
 registerAdapter(openaiCompatibleAdapter);
 registerAdapter(modelsDevAdapter);
-registerAdapter(llmratesAdapter);
+registerAdapter(litellmAdapter);
+registerAdapter(spullaraAdapter);
 
 /** Resolve an adapter by id, falling back to the default when unknown. */
 export function getAdapter(id: string | undefined | null): UpstreamAdapter {
@@ -27,31 +30,30 @@ export function getAdapter(id: string | undefined | null): UpstreamAdapter {
  * Build the full ordered attempt list for a provider fetch.
  *
  * The primary adapter's attempts run first (the live API — best when a key is
- * present). Then, when configured, the no-key catalog sources are APPENDED as
- * fallbacks: models.dev, then LLMRates. So a provider tries its real endpoint
- * first and only falls back to a catalog when the live listing fails or no key
- * is available — which is exactly what official platforms need to show models
- * without a key. Catalog attempts are skipped when they'd duplicate the
- * primary adapter (e.g. a provider whose primary adapter already IS models-dev).
+ * present). Then each configured no-key catalog is APPENDED as a fallback in
+ * CATALOG_ADAPTERS priority order (spullara → models.dev → litellm). So a
+ * provider tries its real endpoint first and only falls back to a catalog when
+ * the live listing fails or no key is available — which is what official
+ * platforms need to show models without a key. A catalog is skipped when it
+ * would duplicate the primary adapter.
  */
 export function buildModelFetchAttempts(args: {
   adapter: string | null | undefined;
   baseUrl: string;
   key: string | null;
-  modelsDevSlug?: string | null;
-  llmratesSlug?: string | null;
+  catalogSlugs?: CatalogSlugs;
 }): UpstreamAttempt[] {
   const primary = getAdapter(args.adapter);
-  const opts = {
-    modelsDevSlug: args.modelsDevSlug ?? null,
-    llmratesSlug: args.llmratesSlug ?? null,
-  };
-  const attempts = [...primary.buildAttempts(args.baseUrl, args.key, opts)];
-  if (args.modelsDevSlug && primary.id !== modelsDevAdapter.id) {
-    attempts.push(...modelsDevAdapter.buildAttempts(args.baseUrl, null, opts));
-  }
-  if (args.llmratesSlug && primary.id !== llmratesAdapter.id) {
-    attempts.push(...llmratesAdapter.buildAttempts(args.baseUrl, null, opts));
+  const slugs = args.catalogSlugs ?? {};
+  const attempts = [
+    ...primary.buildAttempts(args.baseUrl, args.key, { catalogSlug: null }),
+  ];
+  for (const id of CATALOG_ADAPTERS) {
+    const slug = slugs[id as CatalogAdapterId];
+    if (!slug || primary.id === id) continue;
+    attempts.push(
+      ...getAdapter(id).buildAttempts(args.baseUrl, null, { catalogSlug: slug })
+    );
   }
   return attempts;
 }
@@ -68,4 +70,6 @@ export type {
   UpstreamAttemptOptions,
 } from "./types";
 export { MODELS_DEV_API_URL } from "./modelsDev";
-export { LLMRATES_DATASET_URL } from "./llmrates";
+export { LITELLM_CATALOG_URL } from "./litellm";
+export { SPULLARA_BASE_URL, spullaraUrl } from "./spullara";
+

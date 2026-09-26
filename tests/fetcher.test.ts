@@ -91,14 +91,14 @@ function makeProvider(withKey = true): StoredProvider {
   return {
     id: "33333333-3333-3333-3333-333333333333",
     name: "mock",
+    description: null,
     type: "newapi",
     // base_url is WITHOUT /v1 — the adapter appends /api/pricing and /v1/models.
     base_url: `http://127.0.0.1:${port}`,
     aff_code: null,
     adapter: "openai-compatible",
-    site_url: null,
-    models_dev_slug: null,
-    llmrates_slug: null,
+    free: false,
+    catalog_slugs: {},
     key_enc: withKey ? encrypt("sk-test") : null,
     manual_models: false,
     icon: null,
