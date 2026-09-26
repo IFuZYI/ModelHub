@@ -293,7 +293,6 @@ function readEnvPassword() {
   if (!m) throw new Error("MODELHUB_ADMIN_PASSWORD not found in .env");
   return m[1].trim();
 }
-
 /** Build the create/update payload shared by both code paths. */
 function payload(p, icon, { create }) {
   return {
@@ -315,7 +314,7 @@ async function main() {
   const login = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ username: "admin", password }),
   });
   if (!login.ok) throw new Error(`login failed: ${login.status}`);
   const cookie = login.headers.get("set-cookie")?.split(";")[0];

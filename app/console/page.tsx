@@ -178,7 +178,7 @@ export default function ConsolePage() {
                     刷新
                   </button>
                   <Link
-                    href="/admin"
+                    href={`/console/providers/${p.id}`}
                     className="icon-btn"
                   >
                     编辑

@@ -82,6 +82,15 @@ export interface DatabaseSchema {
     key: string;
     value: string;
   };
+  email_verifications: {
+    id: string;
+    email: string;
+    code: string;
+    /** Pending registration payload (JSON) applied on successful verification. */
+    payload: string;
+    expires_at: string;
+    created_at: string;
+  };
 }
 
 export type AppDatabase = Kysely<DatabaseSchema>;

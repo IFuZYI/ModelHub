@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   withErrorHandling,
   parseJson,
-  registerSchema,
+  verifyEmailSchema,
   authService,
   sessionCookieName,
   sessionMaxAgeSeconds,
@@ -11,17 +11,10 @@ import {
 export const dynamic = "force-dynamic";
 
 export const POST = withErrorHandling(async (req: Request) => {
-  const input = await parseJson(req, registerSchema);
-  const result = await authService.register(input);
-  if (result.status === "verification_required") {
-    return NextResponse.json({
-      ok: true,
-      verification_required: true,
-      email: result.email,
-    });
-  }
-  const res = NextResponse.json({ ok: true, user: result.user });
-  res.cookies.set(sessionCookieName, result.token, {
+  const { email, code } = await parseJson(req, verifyEmailSchema);
+  const { user, token } = await authService.verifyEmail(email, code);
+  const res = NextResponse.json({ ok: true, user });
+  res.cookies.set(sessionCookieName, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

@@ -21,7 +21,11 @@ export {
   type UpdateUserProviderInput,
 } from "./services/userProviderService";
 export { userService, UserService } from "./services/userService";
-export { authService, AuthService } from "./services/authService";
+export {
+  authService,
+  AuthService,
+  type RegisterResult,
+} from "./services/authService";
 export {
   settingsService,
   SettingsService,

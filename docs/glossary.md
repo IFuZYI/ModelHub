@@ -55,3 +55,7 @@
 - **脱敏视图**：API 返回给前端的提供商对象，省略 `key_enc`，只含名称、类型、base_url、模型、状态等。
 
 - **抓取状态 (last_status)**：每个提供商记录 `ok` / `error`，配合 `last_fetched`、`last_error`，用于卡片状态徽章与详情页错误展示。
+
+- **邮箱验证 (email verification)**：当开启注册且要求邮箱验证时，注册请求不立即建号，而是发送 6 位验证码（`email_verifications` 表，15 分钟有效），确认后才创建账号并登录。SMTP 密码加密存于 settings。[v0.3]
+
+- **数据库 (database)**：v0.3 起持久化改为 SQLite（默认，`data/app.db`）或 PostgreSQL（`DATABASE_DRIVER=postgres` + `DATABASE_URL`），经 Kysely 双方言与版本化迁移（`migrations/`）管理。旧 JSON 存储在首启时一次性导入。[v0.3]

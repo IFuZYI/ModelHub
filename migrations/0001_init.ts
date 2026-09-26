@@ -6,7 +6,6 @@ export interface Migration {
   up(db: AppDatabase): Promise<void>;
 }
 
-/** v0.3 relational foundation; portable across SQLite and Postgres. */
 export const migration0001Init: Migration = {
   version: 1,
   async up(db) {
@@ -131,5 +130,3 @@ export const migration0001Init: Migration = {
       .execute();
   },
 };
-
-export const migrations: readonly Migration[] = [migration0001Init];

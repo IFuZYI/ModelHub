@@ -1,5 +1,12 @@
 import type { AppDatabase } from "./db";
-import { migrations } from "../../migrations/0001_init";
+import { migration0001Init } from "../../migrations/0001_init";
+import { migration0002EmailVerifications } from "../../migrations/0002_email_verifications";
+
+/** All migrations in version order. */
+export const migrations = [
+  migration0001Init,
+  migration0002EmailVerifications,
+] as const;
 
 /**
  * Apply unapplied schema migrations in version order. Each migration is

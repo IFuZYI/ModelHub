@@ -14,6 +14,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // email-verification step: set once register returns verification_required
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     void fetchAuthStatus().then((s) => {
@@ -40,6 +43,10 @@ export default function LoginPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error?.message || "操作失败");
+      if (json.verification_required) {
+        setPendingEmail(json.email);
+        return;
+      }
       router.replace(json.user?.role === "admin" ? "/admin" : "/console");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "操作失败");
@@ -47,6 +54,69 @@ export default function LoginPage() {
       setBusy(false);
     }
   }
+
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ email: pendingEmail, code }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error?.message || "验证失败");
+      router.replace(json.user?.role === "admin" ? "/admin" : "/console");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "验证失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---- email verification step ----
+  if (pendingEmail)
+    return (
+      <>
+        <SiteHeader authenticated={false} />
+        <main className="shell">
+          <div className="auth-card">
+            <h1 className="auth-title">验证邮箱</h1>
+            <p className="card-domain" style={{ marginBottom: 20 }}>
+              验证码已发送至 {pendingEmail}，请输入 6 位数字。
+            </p>
+            <form onSubmit={submitCode} className="auth-form">
+              <div className="field">
+                <label>验证码</label>
+                <input
+                  value={code}
+                  onChange={(ev) => setCode(ev.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                />
+              </div>
+              {err && <div className="auth-error">{err}</div>}
+              <button className="btn" type="submit" disabled={busy}>
+                {busy ? "验证中…" : "完成注册"}
+              </button>
+            </form>
+            <button
+              className="auth-switch"
+              onClick={() => {
+                setPendingEmail(null);
+                setCode("");
+                setErr(null);
+              }}
+            >
+              返回
+            </button>
+          </div>
+        </main>
+      </>
+    );
 
   return (
     <>

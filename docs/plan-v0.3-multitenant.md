@@ -201,6 +201,12 @@ migrations/
 
 ## 7. 未决 / 后续
 
-- 忘记密码 / 找回（依赖 SMTP）——阶段 6 后追加。
-- 会话吊销 UI（改密即 token_version+1）。
+- 忘记密码 / 找回（依赖 SMTP）——后续追加。
 - 统计大数据量时改物化视图 / 定时重算。
+
+## 8. 完成状态（v0.3.0）
+
+全部 7 阶段已实现并验证：DB 地基、JSON 迁移、认证与用户、per-user
+provider + 统计 + 一键添加、key 池、设置/注册/SMTP/个人页、收尾。
+另补齐：邮箱验证码闭环（`email_verifications` 表 + `/api/auth/verify`）、
+用户自助 provider 编辑页（`/console/providers/[id]`）。

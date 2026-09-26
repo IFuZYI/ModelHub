@@ -136,6 +136,11 @@ export const registerSchema = z.object({
   email: emailSchema.optional(),
 });
 
+export const verifyEmailSchema = z.object({
+  email: emailSchema,
+  code: z.string().trim().regex(/^\d{6}$/, "验证码为 6 位数字"),
+});
+
 /** Admin-created user. Role defaults to "user" when omitted. */
 export const adminCreateUserSchema = z.object({
   username: usernameSchema,
@@ -184,6 +189,7 @@ export const settingsUpdateSchema = z
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
 export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
