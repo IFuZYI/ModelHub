@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listAdapters } from "../upstream";
+import { FREE_TIERS } from "./provider";
 
 /** Shared validation schemas for provider payloads. */
 
@@ -66,8 +67,10 @@ export const createProviderSchema = z.object({
   base_url: baseUrlSchema,
   aff_code: affCodeSchema.optional(),
   adapter: adapterSchema.optional(),
-  // Whether this provider offers a free tier / free tokens (optional).
+  // Whether this provider offers a free tier / free tokens (retired; use free_tier).
   free: z.boolean().optional(),
+  // Free-tier grading: "full" | "free" | "none".
+  free_tier: z.enum(FREE_TIERS).optional(),
   // Per-source catalog slugs (adapter id → slug) for no-key model sync.
   catalog_slugs: catalogSlugsSchema.optional(),
   // key is OPTIONAL: relays that expose a public /api/pricing need no auth.
@@ -91,8 +94,10 @@ export const updateProviderSchema = z
     base_url: baseUrlSchema.optional(),
     aff_code: affCodeSchema.optional(),
     adapter: adapterSchema.optional(),
-    // free: toggle the free-tier flag
+    // free: retired boolean toggle, still accepted for back-compat
     free: z.boolean().optional(),
+    // free_tier: set the free-tier grade ("full" | "free" | "none")
+    free_tier: z.enum(FREE_TIERS).optional(),
     // catalog_slugs: replaces the stored map when provided
     catalog_slugs: catalogSlugsSchema.optional(),
     // Empty key explicitly clears the stored credential; omission preserves it.

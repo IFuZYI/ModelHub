@@ -62,6 +62,16 @@ export function normalizeType(t: string): ProviderType {
 export const DEFAULT_ADAPTER = "openai-compatible";
 
 /**
+ * Free-tier grading, most→least generous:
+ *   - "full": fully free (no paid tier expected),
+ *   - "free": has a free tier / free tokens alongside paid usage,
+ *   - "none": paid only.
+ * Only "full" and "free" surface a badge in the UI; "none" shows nothing.
+ */
+export const FREE_TIERS = ["full", "free", "none"] as const;
+export type FreeTier = (typeof FREE_TIERS)[number];
+
+/**
  * No-key catalog adapters that resolve a provider's model list from a public
  * dataset by slug. Order = fallback priority when a provider configures more
  * than one (most authoritative first). A provider stores its slug per source
@@ -117,10 +127,16 @@ function withMergedCatalogSlugs<T extends Record<string, unknown>>(parsed: T) {
   if (!raw.base_url && typeof raw.site_url === "string") {
     raw.base_url = raw.site_url;
   }
+  // free_tier supersedes the legacy boolean `free`: true → "free", false →
+  // "none". An explicit free_tier always wins; drop the legacy field after.
+  if (raw.free_tier == null) {
+    raw.free_tier = raw.free === true ? "free" : "none";
+  }
   for (const field of [
     ...Object.keys(LEGACY_SLUG_FIELDS),
     ...RETIRED_SLUG_FIELDS,
     "site_url",
+    "free",
   ]) {
     delete raw[field];
   }
@@ -167,7 +183,11 @@ export const providerConfigSchema = z
     // record only had site_url; the transform backfills it.
     base_url: z.string().optional(),
     // True when the provider offers a free tier / free tokens (FREE tag).
-    free: z.boolean().default(false),
+    // Retired in favour of free_tier; accepted on read then folded in.
+    free: z.boolean().optional(),
+    // Free-tier grading: "full" | "free" | "none". No default here — the
+    // transform backfills it (from legacy `free`, else "none") so migration wins.
+    free_tier: z.enum(FREE_TIERS).optional(),
     aff_code: z.string().nullable().default(null),
     adapter: z.string().default(DEFAULT_ADAPTER),
     // Per-source catalog slugs (adapter id → slug) for no-key model sync.
@@ -224,7 +244,8 @@ export const legacyStoredProviderSchema = z
       .transform((t) => normalizeType(t))
       .pipe(z.enum(["native", "proxy", "newapi", "custom"])),
     base_url: z.string(),
-    free: z.boolean().default(false),
+    free: z.boolean().optional(),
+    free_tier: z.enum(FREE_TIERS).optional(),
     aff_code: z.string().nullable().default(null),
     adapter: z.string().default(DEFAULT_ADAPTER),
     catalog_slugs: catalogSlugsSchema.optional(),
@@ -257,8 +278,8 @@ export interface ProviderConfig {
   aff_code: string | null;
   /** Upstream adapter id (see lib/upstream). Defaults to openai-compatible. */
   adapter: string;
-  /** True when the provider offers a free tier / free tokens. */
-  free: boolean;
+  /** Free-tier grading: "full" (fully free) | "free" (has free tier) | "none". */
+  free_tier: FreeTier;
   /** Per-source catalog slugs (adapter id → slug) for no-key model sync. */
   catalog_slugs: CatalogSlugs;
   /** Encrypted API key. Null when the provider needs no auth. */
@@ -294,7 +315,7 @@ export interface StoredProvider {
   base_url: string;
   aff_code: string | null;
   adapter: string;
-  free: boolean;
+  free_tier: FreeTier;
   catalog_slugs: CatalogSlugs;
   key_enc: EncryptedValue | null;
   manual_models: boolean;
@@ -318,8 +339,8 @@ export interface ProviderView {
   base_url: string;
   aff_code: string | null;
   adapter: string;
-  /** True when the provider offers a free tier / free tokens. */
-  free: boolean;
+  /** Free-tier grading: "full" (fully free) | "free" (has free tier) | "none". */
+  free_tier: FreeTier;
   /** Per-source catalog slugs (adapter id → slug) for no-key model sync. */
   catalog_slugs: CatalogSlugs;
   /** Whether an API key is stored (never the key itself). */
@@ -383,7 +404,7 @@ const CONFIG_KEYS = [
   "base_url",
   "aff_code",
   "adapter",
-  "free",
+  "free_tier",
   "catalog_slugs",
   "key_enc",
   "manual_models",
@@ -458,7 +479,7 @@ export function toView(p: StoredProvider): ProviderView {
     base_url: p.base_url,
     aff_code: p.aff_code,
     adapter: p.adapter,
-    free: p.free,
+    free_tier: p.free_tier,
     catalog_slugs: p.catalog_slugs,
     has_key: p.key_enc !== null,
     manual_models: p.manual_models,

@@ -8,7 +8,7 @@ import { TypeBadge, StatusDot } from "../components/badges";
 import ProviderAvatar from "../components/ProviderAvatar";
 import { fetchAuthStatus, importNewapiSite } from "../lib/api";
 import { typeLabel } from "../lib/display";
-import { ProviderView, ProviderType } from "@/lib";
+import { ProviderView, ProviderType, FreeTier } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
 import type { OfficialPreset } from "@/lib/domain/presets";
 
@@ -27,8 +27,8 @@ interface FormState {
   models: string[];
   /** True for presets whose models are manual (no live listing). */
   manual_models: boolean;
-  /** Whether this provider offers a free tier / free tokens (FREE tag). */
-  free: boolean;
+  /** Free-tier grade: "full" | "free" | "none". */
+  free_tier: FreeTier;
   /** Per-source catalog slugs (adapter id → slug) for no-key model sync. */
   catalog_slugs: Record<string, string>;
   /** Upstream adapter id (empty = server default openai-compatible). */
@@ -71,7 +71,7 @@ const EMPTY_FORM: FormState = {
   icon: "",
   models: [],
   manual_models: false,
-  free: false,
+  free_tier: "none",
   catalog_slugs: {},
   adapter: "",
   register_methods: [],
@@ -184,7 +184,7 @@ export default function AdminPage() {
       icon: p.icon ?? "",
       models: p.models,
       manual_models: p.manual_models,
-      free: p.free ?? false,
+      free_tier: p.free_tier ?? "none",
       catalog_slugs: { ...(p.catalog_slugs ?? {}) },
       adapter: p.adapter ?? "",
       register_methods: p.register_methods ?? [],
@@ -215,7 +215,7 @@ export default function AdminPage() {
         icon: r.icon ?? "",
         models: [],
         manual_models: false,
-        free: false,
+        free_tier: "none",
         catalog_slugs: {},
         adapter: "",
         register_methods: r.register_methods ?? [],
@@ -248,7 +248,7 @@ export default function AdminPage() {
       icon: faviconUrl(preset.domain),
       models: preset.models,
       manual_models: preset.manual_models ?? false,
-      free: preset.free ?? false,
+      free_tier: preset.free_tier ?? "none",
       catalog_slugs: { ...(preset.catalog_slugs ?? {}) },
       adapter: preset.adapter ?? "",
       register_methods: [],
@@ -290,8 +290,8 @@ export default function AdminPage() {
       };
       // On edit, omit an unchanged key; an explicit clear is a separate action.
       if (!isEdit || form.key) body.key = form.key;
-      // free: always send the flag so toggling it off on edit persists.
-      body.free = form.free;
+      // free_tier: always send so changing it on edit persists.
+      body.free_tier = form.free_tier;
       if (form.adapter) body.adapter = form.adapter;
       // catalog_slugs: keep only non-empty entries. On edit always send (even
       // when empty) so cleared slugs persist.
@@ -847,17 +847,21 @@ export default function AdminPage() {
                         />
                       </div>
                     )}
-                    {/* FREE flag: single toggle button, NO by default. */}
+                    {/* Free-tier grade: 三档单选 FULL FREE / FREE / NO. */}
                     <div className="field">
                       <label>免费额度</label>
-                      <button
-                        type="button"
-                        className={`free-toggle ${form.free ? "on" : ""}`}
-                        aria-pressed={form.free}
-                        onClick={() => setForm({ ...form, free: !form.free })}
-                      >
-                        {form.free ? "FREE" : "NO"}
-                      </button>
+                      <Select
+                        ariaLabel="免费额度分级"
+                        value={form.free_tier}
+                        onChange={(v) =>
+                          setForm({ ...form, free_tier: v as FreeTier })
+                        }
+                        options={[
+                          { value: "none", label: "NO（付费）" },
+                          { value: "free", label: "FREE（有免费额度）" },
+                          { value: "full", label: "FULL FREE（完全免费）" },
+                        ]}
+                      />
                     </div>
                   </div>
                   <div className="field">

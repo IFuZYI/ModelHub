@@ -217,17 +217,34 @@ describe("ProviderService", () => {
     expect(cleared.catalog_slugs).toEqual({});
   });
 
-  it("persists the free flag and lets an update toggle it", async () => {
+  it("grades the free tier and lets an update change it", async () => {
     const s = svc();
     const created = await s.create({
       name: "FreeCo",
       type: "native",
       base_url: base,
+      free_tier: "full",
+    });
+    expect(created.free_tier).toBe("full");
+
+    const down = await s.update(created.id, { free_tier: "free" });
+    expect(down.free_tier).toBe("free");
+
+    const off = await s.update(created.id, { free_tier: "none" });
+    expect(off.free_tier).toBe("none");
+  });
+
+  it("maps the legacy boolean free flag onto free_tier", async () => {
+    const s = svc();
+    const created = await s.create({
+      name: "LegacyFree",
+      type: "native",
+      base_url: base,
       free: true,
     });
-    expect(created.free).toBe(true);
+    expect(created.free_tier).toBe("free");
 
     const off = await s.update(created.id, { free: false });
-    expect(off.free).toBe(false);
+    expect(off.free_tier).toBe("none");
   });
 });

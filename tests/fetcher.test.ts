@@ -97,7 +97,7 @@ function makeProvider(withKey = true): StoredProvider {
     base_url: `http://127.0.0.1:${port}`,
     aff_code: null,
     adapter: "openai-compatible",
-    free: false,
+    free_tier: "none",
     catalog_slugs: {},
     key_enc: withKey ? encrypt("sk-test") : null,
     manual_models: false,

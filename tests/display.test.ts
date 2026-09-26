@@ -106,7 +106,7 @@ describe("toPublicView", () => {
     base_url: "https://example.com",
     aff_code: null,
     adapter: "openai-compatible",
-    free: false,
+    free_tier: "none",
     catalog_slugs: {},
     key_enc: null,
     manual_models: false,
@@ -128,9 +128,16 @@ describe("toPublicView", () => {
     expect(view).not.toHaveProperty("has_key");
   });
 
-  it("carries the free-tier flag through to the public view", () => {
-    expect(toPublicView({ ...provider, free: true }).free).toBe(true);
-    expect(toPublicView({ ...provider, free: false }).free).toBe(false);
+  it("carries the free-tier grade through to the public view", () => {
+    expect(toPublicView({ ...provider, free_tier: "full" }).free_tier).toBe(
+      "full"
+    );
+    expect(toPublicView({ ...provider, free_tier: "free" }).free_tier).toBe(
+      "free"
+    );
+    expect(toPublicView({ ...provider, free_tier: "none" }).free_tier).toBe(
+      "none"
+    );
   });
 });
 

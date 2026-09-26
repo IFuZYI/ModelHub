@@ -10,6 +10,7 @@ import {
   toView,
   toPublicView,
   DEFAULT_ADAPTER,
+  type FreeTier,
 } from "../domain/provider";
 import { fileRepository, ProviderRepository } from "../infra/repository";
 import { refreshProvider } from "./fetcher";
@@ -25,6 +26,20 @@ function modelDedupeKey(model: string): string {
 /** Normalize a string field: a value keeps it, empty/absent clears to null. */
 function orNull(v: string | null | undefined): string | null {
   return v ? v : null;
+}
+
+/**
+ * Resolve a free-tier grade from an input that may carry the new `free_tier`
+ * or the legacy boolean `free`. free_tier wins; then free:true → "free".
+ */
+function resolveFreeTier(
+  freeTier: FreeTier | undefined,
+  free: boolean | undefined,
+  fallback: FreeTier
+): FreeTier {
+  if (freeTier !== undefined) return freeTier;
+  if (free !== undefined) return free ? "free" : "none";
+  return fallback;
 }
 
 /**
@@ -93,7 +108,7 @@ export class ProviderService {
       base_url: input.base_url,
       aff_code: orNull(input.aff_code),
       adapter: input.adapter ?? DEFAULT_ADAPTER,
-      free: input.free ?? false,
+      free_tier: resolveFreeTier(input.free_tier, input.free, "none"),
       catalog_slugs: input.catalog_slugs ?? {},
       key_enc: input.key ? encrypt(input.key) : null,
       manual_models: manual,
@@ -120,7 +135,13 @@ export class ProviderService {
     if (input.type !== undefined) updated.type = input.type;
     if (input.base_url !== undefined) updated.base_url = input.base_url;
     if (input.adapter !== undefined) updated.adapter = input.adapter;
-    if (input.free !== undefined) updated.free = input.free;
+    if (input.free_tier !== undefined || input.free !== undefined) {
+      updated.free_tier = resolveFreeTier(
+        input.free_tier,
+        input.free,
+        updated.free_tier
+      );
+    }
     if (input.catalog_slugs !== undefined) {
       updated.catalog_slugs = input.catalog_slugs;
     }

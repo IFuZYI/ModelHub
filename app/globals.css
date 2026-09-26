@@ -817,6 +817,11 @@ main {
   font-weight: 700;
   letter-spacing: 0.04em;
 }
+/* FULL FREE: stronger emphasis than a plain free tier. */
+.badge.free-tag.full {
+  color: #fff;
+  background: #0a7d2e;
+}
 .status {
   display: inline-flex;
   align-items: center;
@@ -1223,38 +1228,6 @@ main {
 .field-row > .field {
   flex: 1;
   min-width: 0;
-}
-
-/* ---------- free-tier toggle button (matches the type Select size) ---------- */
-.free-toggle {
-  width: 100%;
-  height: 48px;
-  padding: 0 16px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--text-3);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: 0.16s ease;
-}
-.free-toggle:hover {
-  border-color: var(--line-2);
-  color: var(--text);
-}
-/* On = highlighted with the inverted accent (white-on-black), monochrome. */
-.free-toggle.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-.free-toggle:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 2px var(--bg),
-    0 0 0 4px var(--line-3);
 }
 
 /* ---------- add-provider flows (choice menu, presets, hints) ---------- */

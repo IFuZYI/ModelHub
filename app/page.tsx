@@ -175,7 +175,7 @@ export default function Home() {
                 </div>
                 <div className="card-bottom">
                   <TypeBadge type={p.type} />
-                  {p.free && <FreeBadge />}
+                  <FreeBadge tier={p.free_tier} />
                   <span className="card-tag">{p.model_count} 模型</span>
                   {p.aff_code && <span className="card-tag">邀请码</span>}
                 </div>

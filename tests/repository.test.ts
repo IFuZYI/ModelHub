@@ -32,7 +32,7 @@ const sample = (id: string) => ({
   base_url: "https://x.com/v1",
   aff_code: null,
   adapter: "openai-compatible",
-  free: false,
+  free_tier: "none" as const,
   catalog_slugs: {},
   key_enc: { v: 1 as const, iv: "i", ct: "c", tag: "t" },
   manual_models: false,

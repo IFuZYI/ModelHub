@@ -129,7 +129,7 @@ export default function ProviderDetail({
               <ProviderAvatar name={p.name} icon={p.icon} />
               {p.name}
               <TypeBadge type={p.type} />
-              {p.free && <FreeBadge />}
+              <FreeBadge tier={p.free_tier} />
             </h1>
             <p className="card-domain" style={{ marginTop: 10 }}>
               {p.base_url}

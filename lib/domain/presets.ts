@@ -16,6 +16,8 @@
  */
 
 /** Official brand favicon via Google's favicon service (resolves real icon). */
+import type { FreeTier } from "./provider";
+
 export function faviconUrl(domain: string): string {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 }
@@ -69,8 +71,8 @@ export interface OfficialPreset {
   manual_models?: boolean;
   /** Optional caveat shown when the preset is picked. */
   note?: string;
-  /** Whether this provider offers a free tier / free tokens (FREE tag). */
-  free?: boolean;
+  /** Free-tier grade for this provider: "full" | "free" | "none" (default none). */
+  free_tier?: FreeTier;
 }
 
 export const OFFICIAL_PRESETS: OfficialPreset[] = [
@@ -115,7 +117,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://aistudio.google.com",
     region: "国际",
     catalog_slugs: { "spullara": "gemini", "models-dev": "google", "litellm": "gemini" },
-    free: true,
+    free_tier: "free",
     models: [
       "gemini-2.5-pro",
       "gemini-2.5-flash",
@@ -145,7 +147,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://mistral.ai",
     region: "国际",
     catalog_slugs: { "spullara": "mistral", "models-dev": "mistral", "litellm": "mistral" },
-    free: true,
+    free_tier: "free",
     models: [
       "mistral-large-latest",
       "mistral-medium-latest",
@@ -163,7 +165,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://cohere.com",
     region: "国际",
     catalog_slugs: { "models-dev": "cohere", "litellm": "cohere" },
-    free: true,
+    free_tier: "free",
     models: [
       "command-a-03-2025",
       "command-a-plus-05-2026",
@@ -181,7 +183,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://groq.com",
     region: "国际",
     catalog_slugs: { "models-dev": "groq", "litellm": "groq" },
-    free: true,
+    free_tier: "free",
     models: [
       "llama-3.3-70b-versatile",
       "openai/gpt-oss-120b",
@@ -199,7 +201,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://www.cerebras.ai",
     region: "国际",
     catalog_slugs: { "models-dev": "cerebras", "litellm": "cerebras" },
-    free: true,
+    free_tier: "free",
     models: ["gpt-oss-120b", "qwen-3.8-27b"],
     note: "晶圆级芯片推理；免费 100 万 token/天。",
   },
@@ -229,7 +231,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://fireworks.ai",
     region: "国际",
     catalog_slugs: { "models-dev": "fireworks-ai", "litellm": "fireworks_ai" },
-    free: true,
+    free_tier: "free",
     models: [
       "accounts/fireworks/models/gpt-oss-120b",
       "accounts/fireworks/models/glm-5p3",
@@ -246,7 +248,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://build.nvidia.com",
     region: "国际",
     catalog_slugs: { "models-dev": "nvidia", "litellm": "nvidia_nim" },
-    free: true,
+    free_tier: "free",
     models: [
       "deepseek-ai/deepseek-v4-pro",
       "qwen/qwen2.5-coder-32b-instruct",
@@ -263,7 +265,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://sambanova.ai",
     region: "国际",
     catalog_slugs: { "litellm": "sambanova" },
-    free: true,
+    free_tier: "free",
     models: [
       "meta-llama-3-3-70b-instruct",
       "deepseek-v3-2",
@@ -283,7 +285,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://platform.deepseek.com",
     region: "中国",
     catalog_slugs: { "spullara": "deepseek", "models-dev": "deepseek", "litellm": "deepseek" },
-    free: true,
+    free_tier: "free",
     models: ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"],
     note: "极致低价、OpenAI 兼容；注册送 500 万 Token（30 天）。",
   },
@@ -297,7 +299,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://bailian.console.alibabacloud.com",
     region: "中国",
     catalog_slugs: { "spullara": "qwen", "models-dev": "alibaba", "litellm": "dashscope" },
-    free: true,
+    free_tier: "free",
     models: ["qwen-max", "qwen-plus", "qwen-flash"],
     note: "企业级全栈；新用户 7000 万免费 Tokens（90 天）。",
   },
@@ -324,7 +326,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://open.bigmodel.cn",
     region: "中国",
     catalog_slugs: { "spullara": "zai", "models-dev": "zhipuai", "litellm": "zai" },
-    free: true,
+    free_tier: "free",
     models: ["glm-4.7", "glm-4.6", "glm-4.5", "glm-4.5-air"],
     note: "GLM-4.5-Flash 长期免费；注册送 2500 万 Token。",
   },
@@ -426,7 +428,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://openrouter.ai",
     region: "路由",
     catalog_slugs: { "models-dev": "openrouter", "litellm": "openrouter" },
-    free: true,
+    free_tier: "free",
     models: [
       "openai/gpt-4o",
       "anthropic/claude-opus-4.8",
@@ -490,7 +492,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://requesty.ai",
     region: "路由",
     catalog_slugs: { "models-dev": "requesty" },
-    free: true,
+    free_tier: "free",
     models: ["claude-opus-4-6", "gemini-2.5-pro@eu"],
     note: "300+ 模型，免费层约 200 次请求/天。",
   },
@@ -504,7 +506,7 @@ export const OFFICIAL_PRESETS: OfficialPreset[] = [
     base_url: "https://fastrouter.ai",
     region: "路由",
     catalog_slugs: { "models-dev": "fastrouter" },
-    free: true,
+    free_tier: "free",
     models: ["anthropic/claude-opus-4.8", "google/gemini-2.5-pro"],
     note: ":free 后缀模型每天 10 次/组织。",
   },

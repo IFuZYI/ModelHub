@@ -38,7 +38,7 @@ const PRESETS = [
     domain: "ai.google.dev",
     url: "https://aistudio.google.com",
     catalogSlugs: { spullara: "gemini", "models-dev": "google", litellm: "gemini" },
-    free: true,
+    free_tier: "free",
     models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
   },
   {
@@ -57,7 +57,7 @@ const PRESETS = [
     domain: "mistral.ai",
     url: "https://mistral.ai",
     catalogSlugs: { spullara: "mistral", "models-dev": "mistral", litellm: "mistral" },
-    free: true,
+    free_tier: "free",
     models: ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest"],
   },
   {
@@ -67,7 +67,7 @@ const PRESETS = [
     domain: "cohere.com",
     url: "https://cohere.com",
     catalogSlugs: { "models-dev": "cohere", litellm: "cohere" },
-    free: true,
+    free_tier: "free",
     models: ["command-a-03-2025", "command-a-plus-05-2026", "command-r-plus-08-2024"],
   },
   // 官方 · 推理云
@@ -78,7 +78,7 @@ const PRESETS = [
     domain: "groq.com",
     url: "https://groq.com",
     catalogSlugs: { "models-dev": "groq", litellm: "groq" },
-    free: true,
+    free_tier: "free",
     models: ["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "groq/compound"],
   },
   {
@@ -88,7 +88,7 @@ const PRESETS = [
     domain: "cerebras.ai",
     url: "https://www.cerebras.ai",
     catalogSlugs: { "models-dev": "cerebras", litellm: "cerebras" },
-    free: true,
+    free_tier: "free",
     models: ["gpt-oss-120b", "qwen-3.8-27b"],
   },
   {
@@ -107,7 +107,7 @@ const PRESETS = [
     domain: "fireworks.ai",
     url: "https://fireworks.ai",
     catalogSlugs: { "models-dev": "fireworks-ai", litellm: "fireworks_ai" },
-    free: true,
+    free_tier: "free",
     models: ["accounts/fireworks/models/gpt-oss-120b", "accounts/fireworks/models/glm-5p3"],
   },
   {
@@ -117,7 +117,7 @@ const PRESETS = [
     domain: "nvidia.com",
     url: "https://build.nvidia.com",
     catalogSlugs: { "models-dev": "nvidia", litellm: "nvidia_nim" },
-    free: true,
+    free_tier: "free",
     models: ["deepseek-ai/deepseek-v4-pro", "qwen/qwen2.5-coder-32b-instruct"],
   },
   {
@@ -127,7 +127,7 @@ const PRESETS = [
     domain: "sambanova.ai",
     url: "https://sambanova.ai",
     catalogSlugs: { litellm: "sambanova" },
-    free: true,
+    free_tier: "free",
     models: ["meta-llama-3-3-70b-instruct", "deepseek-v3-2", "gpt-oss-120b", "minimax-m3"],
   },
   // 官方 · 国内
@@ -138,7 +138,7 @@ const PRESETS = [
     domain: "deepseek.com",
     url: "https://platform.deepseek.com",
     catalogSlugs: { spullara: "deepseek", "models-dev": "deepseek", litellm: "deepseek" },
-    free: true,
+    free_tier: "free",
     models: ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"],
   },
   {
@@ -148,7 +148,7 @@ const PRESETS = [
     domain: "aliyun.com",
     url: "https://bailian.console.alibabacloud.com",
     catalogSlugs: { spullara: "qwen", "models-dev": "alibaba", litellm: "dashscope" },
-    free: true,
+    free_tier: "free",
     models: ["qwen-max", "qwen-plus", "qwen-flash"],
   },
   {
@@ -166,7 +166,7 @@ const PRESETS = [
     domain: "bigmodel.cn",
     url: "https://open.bigmodel.cn",
     catalogSlugs: { spullara: "zai", "models-dev": "zhipuai", litellm: "zai" },
-    free: true,
+    free_tier: "free",
     models: ["glm-4.7", "glm-4.6", "glm-4.5", "glm-4.5-air"],
   },
   {
@@ -235,7 +235,7 @@ const PRESETS = [
     domain: "openrouter.ai",
     url: "https://openrouter.ai",
     catalogSlugs: { "models-dev": "openrouter", litellm: "openrouter" },
-    free: true,
+    free_tier: "free",
     models: ["openai/gpt-4o", "anthropic/claude-opus-4.8", "google/gemini-2.5-pro"],
   },
   {
@@ -272,7 +272,7 @@ const PRESETS = [
     domain: "requesty.ai",
     url: "https://requesty.ai",
     catalogSlugs: { "models-dev": "requesty" },
-    free: true,
+    free_tier: "free",
     models: ["claude-opus-4-6", "gemini-2.5-pro@eu"],
   },
   {
@@ -282,7 +282,7 @@ const PRESETS = [
     domain: "fastrouter.ai",
     url: "https://fastrouter.ai",
     catalogSlugs: { "models-dev": "fastrouter" },
-    free: true,
+    free_tier: "free",
     models: ["anthropic/claude-opus-4.8", "google/gemini-2.5-pro"],
   },
 ];
@@ -303,7 +303,7 @@ function payload(p, icon, { create }) {
     ...(p.description ? { description: p.description } : {}),
     icon,
     type: p.type,
-    free: Boolean(p.free),
+    free_tier: p.free_tier ?? "none",
     manual_models: Boolean(p.manual_models),
     catalog_slugs: p.catalogSlugs ?? {},
   };
