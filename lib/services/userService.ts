@@ -60,6 +60,15 @@ export class UserService {
   async update(id: string, args: UpdateUserArgs): Promise<UserView> {
     const existing = await this.repo.getById(id);
     if (!existing) throw AppError.notFound("User not found");
+    // Guard against locking the console out: the last remaining admin may not
+    // be demoted to user or disabled. (Self vs other is enforced at the route.)
+    const losingAdmin =
+      existing.role === "admin" &&
+      ((args.role !== undefined && args.role !== "admin") ||
+        args.status === "disabled");
+    if (losingAdmin && (await this.adminCount()) <= 1) {
+      throw AppError.validation("不能降级或停用唯一的管理员");
+    }
     const updated = await this.repo.update(id, {
       email: args.email,
       password_hash:

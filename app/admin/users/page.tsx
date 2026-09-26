@@ -28,6 +28,7 @@ export default function AdminUsersPage() {
   const [email, setEmail] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "user">("user");
   const [err, setErr] = useState<string | null>(null);
+  const [selfId, setSelfId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const status = await fetchAuthStatus();
@@ -37,6 +38,7 @@ export default function AdminUsersPage() {
       return;
     }
     setAllowed(true);
+    setSelfId(status.user?.id ?? null);
     const res = await fetch("/api/admin/users", { credentials: "same-origin" });
     const json = await res.json();
     setUsers(json.users ?? []);
@@ -172,25 +174,31 @@ export default function AdminUsersPage() {
                 <td>{u.role === "admin" ? "管理员" : "用户"}</td>
                 <td>{u.status === "active" ? "启用" : "禁用"}</td>
                 <td className="row-actions">
-                  <button
-                    className="icon-btn"
-                    onClick={() => setRole(u.id, u.role === "admin" ? "user" : "admin")}
-                  >
-                    {u.role === "admin" ? "降为用户" : "升为管理员"}
-                  </button>
-                  <button
-                    className="icon-btn"
-                    onClick={() => setStatus(u.id, u.status === "active" ? "disabled" : "active")}
-                  >
-                    {u.status === "active" ? "禁用" : "启用"}
-                  </button>
-                  <button
-                    className="icon-btn"
-                    style={{ color: "var(--err)" }}
-                    onClick={() => remove(u.id)}
-                  >
-                    删除
-                  </button>
+                  {u.id === selfId ? (
+                    <span className="card-domain">（当前登录）</span>
+                  ) : (
+                    <>
+                      <button
+                        className="icon-btn"
+                        onClick={() => setRole(u.id, u.role === "admin" ? "user" : "admin")}
+                      >
+                        {u.role === "admin" ? "降为用户" : "升为管理员"}
+                      </button>
+                      <button
+                        className="icon-btn"
+                        onClick={() => setStatus(u.id, u.status === "active" ? "disabled" : "active")}
+                      >
+                        {u.status === "active" ? "禁用" : "启用"}
+                      </button>
+                      <button
+                        className="icon-btn"
+                        style={{ color: "var(--err)" }}
+                        onClick={() => remove(u.id)}
+                      >
+                        删除
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
