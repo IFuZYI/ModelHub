@@ -1,46 +1,192 @@
 # ModelHub
 
-单用户私有控制台，集中查看多个 API 提供商（官方 / newapi 类中转站）的可用模型列表。
-
-设计文档见 `docs/design.md`，决策记录见 `docs/adr/`，术语表见 `docs/glossary.md`。
+AI API 站点目录平台。用户各自维护自己的 API 站点与实时模型清单，并可对外发布
+个人分享页——形态类似博客：**用户即博主，站点即文章**。访客无需登录即可浏览、
+按模型或来源跨站检索、对站点评分与评论。主页目录由首个管理员维护，各用户的站点
+展示在各自的个人分享页（`/p/<slug>`）。
 
 ## 特性
 
-- 提供商卡片总览 + 详情页（可用模型列表，可搜索）
-- 添加/编辑/删除提供商，支持官方/中转徽章
-- 模型每 6 小时自动刷新，也可手动刷新；失败保留上次缓存
-- API key 用 AES-256-GCM 加密存储，永不下发前端
+### 浏览与检索
 
-## 架构（v0.2 工业级）
+- 站点卡片总览（主页 = 首个管理员的站点）+ 详情页（完整模型清单，可按厂商分组与过滤）
+- 跨站搜索：按**模型名**或**来源（厂商）**检索，也可按站点名与标签检索
+- 主页支持按评分 / 模型数 / 名称排序（默认按评分）
+- 深色 / 浅色主题
 
-- 分层：薄路由（`app/api`）→ 业务层（`lib/providerService`）→ 存储/抓取/加密
-- 配置集中校验（zod，fail-fast）：`lib/config/env.ts`
-- 入站校验 + 持久化数据校验（zod）：`lib/validation.ts` / `lib/types.ts`
-- 类型化错误 + 统一错误信封：`lib/errors.ts` / `lib/http.ts`
-- 存储用 async mutex 串行化 + 原子写，杜绝并发损坏
-- 抓取带超时、429/5xx 有界重试、指数退避；全量刷新有界并发
-- 结构化日志（pino，自动脱敏 key）：`lib/logger.ts`
-- 健康检查：`GET /api/health`
-- 单元测试（vitest）：crypto / validation / store / fetcher
-- 多阶段 Docker 镜像（non-root、standalone）
+### 社区（v0.4 博客层）
+
+- **评分**：每个站点 0–5 星，仅注册用户可评分，可修改或清除
+- **评论**：站点下方评论，仅注册用户可发表；作者或站点主人可删除
+- **标签**：全局标签词库，用户可为站点自定义标签（每站最多 12 个）
+- **个人分享页**：`/p/<slug>` 展示该用户的公开资料与站点，含总评分、评论数
+- **个人资料**：显示名称、简介、头像，展示在个人页与站点卡片上
+
+### 站点管理
+
+- 添加 / 编辑 / 删除站点，支持官方（原生 / 中转）与 NewAPI / 自建
+- NewAPI 站点支持一键导入（探测 `/api/status` 预填名称与图标；邀请码取自粘贴 URL 的 `?aff=`）
+- 模型默认每 6 小时自动刷新，也可手动刷新；失败保留上次缓存
+- API key 以 AES-256-GCM 加密存储，永不下发前端
+
+### 管理
+
+- 用户管理：建号、改角色、禁用 / 启用、删除
+- 系统设置：注册开关、邮箱验证、SMTP、个人页开关、key 共享
+- 全服统计：按 `normalized_base_url` 聚合的全服站点视图，可一键收编
+
+## 技术栈
+
+| 层 | 选型 |
+|---|---|
+| 框架 | Next.js 16（App Router）+ React 19 |
+| 语言 | TypeScript 5.7（strict） |
+| 数据库 | SQLite（默认，`better-sqlite3`）/ PostgreSQL 可选，查询层 Kysely（双 dialect） |
+| 校验 | zod（入站 + 持久化） |
+| 日志 | pino（自动脱敏） |
+| 测试 | vitest |
 
 ## 快速开始
 
 ```bash
 npm install
 
-# 生成主密钥并写入 .env
+# 生成主密钥（AES-256-GCM，用于加密站点 API key）
 node -e "console.log('MODELHUB_MASTER_KEY=' + require('crypto').randomBytes(32).toString('base64'))" > .env
-# 设置后台管理员密码
+# 初始管理员密码（首启创建 admin 账号）
 echo "MODELHUB_ADMIN_PASSWORD=你的密码" >> .env
 
 npm run build
-npm start        # 默认监听所有接口；私有使用建议: npx next start -H 127.0.0.1
-# 开发: npm run dev
+npm start
+# 开发：npm run dev
 ```
 
 - 前台目录：http://localhost:3000 （公开浏览，无需登录）
-- 管理后台：http://localhost:3000/admin （用 `MODELHUB_ADMIN_PASSWORD` 登录后配置提供商）
+- 控制台：http://localhost:3000/console （登录后：概览 / 我的站点 / 个人资料 / 账号安全；
+  管理员另见用户管理 / 全服统计 / 系统设置）
+- 旧路径 `/admin/*` 会 307 跳转到 `/console/*`
+
+`npm start`（`next start`）默认监听所有接口。私有部署建议只绑回环：
+`npx next start -H 127.0.0.1`。
+
+首次启动会自动建库、跑迁移，并用 `MODELHUB_ADMIN_PASSWORD` 创建 `admin` 账号
+（未设置则生成随机密码，仅记录一条警告、不打印密码值）。注册默认关闭，可在
+「系统设置」中开启。
+
+## 控制台结构
+
+登录后统一走 `/console` 侧边栏：
+
+| 路径 | 名称 | 权限 |
+|---|---|---|
+| `/console` | 概览（博客式仪表盘） | 登录用户 |
+| `/console/providers` | 我的站点 | 登录用户 |
+| `/console/profile` | 个人资料 | 登录用户 |
+| `/console/account` | 账号安全（改密码） | 登录用户 |
+| `/console/users` | 用户管理 | 管理员 |
+| `/console/stats` | 全服统计 | 管理员 |
+| `/console/settings` | 系统设置 | 管理员 |
+
+公开页面：`/`（目录 + 搜索，展示首个管理员的站点）、`/providers/<id>`（站点详情）、
+`/p/<slug>`（个人分享页）。
+
+## 架构
+
+分层，路由只做编排：
+
+```
+app/api/**            薄路由：鉴权守卫 + 入站校验 + 错误信封
+  ↓
+lib/services/**       用例层：authService / userProviderService / blogService /
+                      searchService / publicService / statsService / keyPoolService /
+                      settingsService / userService / importer / mailer / probe
+  ↓
+lib/infra/**          db（Kysely 双方言 + 迁移）、repositories（数据访问）、
+                      crypto（AES-256-GCM）、password（scrypt）、logger（pino）
+lib/domain/**         纯领域：provider / user / blog（标签·评分·评论）/ vendor /
+                      stats / presets / validation / errors
+lib/upstream/**       模型来源适配器：openaiCompatible / spullara / models-dev / litellm
+```
+
+- 配置集中校验（zod，fail-fast）：`lib/config/env.ts`
+- 版本化迁移：`migrations/0001..0004`，按 version 幂等应用
+- 结构化日志（pino，自动脱敏 key）：`lib/infra/logger.ts`
+- 健康检查：`GET /api/health`
+- 测试：19 个文件 / 115 用例（`tests/`）
+
+### 数据模型（迁移 0001–0004）
+
+`users`、`user_providers`、`model_caches`、`provider_stats`、`key_pool`、`settings`
+（以上 0001）；`email_verifications`（0002）；`user_profiles`、`tags` + `provider_tags`、
+`ratings`、`comments`（0004）。0003 仅新增性能索引，不建表。
+
+标签写操作在进程内串行（`globalThis` 锁链）并在 Postgres 上取事务级 advisory
+lock，避免并发写死锁或静默丢链。
+
+## API
+
+### 公开
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/providers` | 主页站点列表（含作者 / 标签 / 评分 / 评论数） |
+| GET | `/api/providers/:id` | 站点详情 + 模型 + 评论 |
+| GET | `/api/providers/:id/ratings` | 评分汇总 + 列表（登录时含 `my_score`） |
+| GET | `/api/providers/:id/comments` | 评论列表 |
+| GET | `/api/providers/:id/tags` | 站点标签 |
+| GET | `/api/search` | 跨站搜索（`q` / `author` / `tag` / `type` / `limit`） |
+| GET | `/api/tags` | 标签词库（含使用数） |
+| GET | `/api/pages/:slug` | 个人分享页数据 |
+| GET | `/api/health` | 健康检查 |
+
+### 需登录
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/auth/login` · `/register` · `/verify` · `/logout` | 认证 |
+| GET | `/api/auth/status` | 会话与站点开关状态 |
+| POST | `/api/providers` | 新建站点（属主） |
+| PUT/DELETE | `/api/providers/:id` | 编辑 / 删除（属主） |
+| POST | `/api/providers/:id/refresh` | 立即重抓 |
+| PUT | `/api/providers/:id/ratings` | 评分（0–5） |
+| POST | `/api/providers/:id/comments` | 发表评论 |
+| PUT | `/api/providers/:id/tags` | 替换站点标签（属主） |
+| DELETE | `/api/comments/:id` | 删除评论（作者或站点主人） |
+| GET/PUT | `/api/me/profile` | 个人资料 |
+| POST | `/api/me/password` | 修改密码 |
+| POST | `/api/me/slug` | 生成个人页 slug |
+| GET | `/api/me/providers` | 我的站点（含状态诊断） |
+| POST | `/api/providers/import` | NewAPI 站点探测导入 |
+
+### 管理员
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/api/admin/users` | 用户列表 / 建号 |
+| PUT/DELETE | `/api/admin/users/:id` | 改角色·状态 / 删除 |
+| GET/PUT | `/api/admin/settings` | 系统设置 |
+| GET/POST | `/api/admin/stats` | 全服统计 / 一键收编 |
+
+所有错误响应统一信封：`{ error: { code, message, details? } }`；校验失败时
+`message` 会带具体字段原因（如「密码：密码至少 8 位」）。
+
+## 配置
+
+见 `.env.example`。`MODELHUB_MASTER_KEY` 用于 AES-256-GCM 加密站点 API key，
+在录入 / 更新 key 时校验（未设置则拒绝该操作）；`MODELHUB_ADMIN_PASSWORD` 用于
+首启创建管理员（缺失则生成随机密码，仅记录一条警告、不打印密码值）。
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `MODELHUB_MASTER_KEY` | — | 32 字节（base64/hex），AES-256-GCM 主密钥；录入 key 时必需 |
+| `MODELHUB_ADMIN_PASSWORD` | — | 首启管理员密码 |
+| `MODELHUB_DATA_PATH` | `./data` | SQLite 数据目录（或 `.db` 路径） |
+| `DATABASE_DRIVER` | `sqlite` | `sqlite` \| `postgres` |
+| `DATABASE_URL` | — | postgres 连接串（driver=postgres 时必填） |
+| `MODELHUB_ADMIN_PATH` | `/admin` | 自定义后台路径（仅混淆 URL，非鉴权） |
+| `MODELHUB_REFRESH_INTERVAL_HOURS` | `6` | 自动刷新间隔 |
+| `MODELHUB_FETCH_TIMEOUT_MS` / `MODELHUB_FETCH_RETRIES` / `MODELHUB_REFRESH_CONCURRENCY` | `15000` / `2` / `4` | 抓取超时 / 重试 / 并发调优 |
+| `LOG_LEVEL` | `debug`（生产 `info`） | 日志级别 |
 
 ## 脚本
 
@@ -57,20 +203,49 @@ npm test             # vitest 单元测试
 ## Docker 部署
 
 ```bash
+# 方式一：环境变量
 export MODELHUB_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+export MODELHUB_ADMIN_PASSWORD=你的密码
+docker compose up --build -d
+
+# 方式二：在项目根写 .env（compose 自动读取），然后
 docker compose up --build -d
 ```
 
-compose 默认仅绑定 `127.0.0.1:3000`，数据存于命名卷 `modelhub-data`（`/data/data.json`）。
+- 默认 **SQLite**，数据存于命名卷 `modelhub-data`（容器内 `/data/app.db`）。
+- 默认仅绑定回环 `127.0.0.1:3000`；改端口用 `MODELHUB_PORT=8080`。
+- 容器以非 root 用户（uid 1001）运行，`/data` 卷归其所有。
+- 内置健康检查：`GET /api/health`。
 
-## 配置
+**PostgreSQL 后端**（可选，compose profile）：
 
-所有环境变量见 `.env.example`。必填 `MODELHUB_MASTER_KEY`；其余（数据路径、
-刷新间隔、抓取超时/重试/并发、日志级别）均有默认值。
+```bash
+export POSTGRES_PASSWORD=改成强密码            # 可选，默认 modelhub
+DATABASE_DRIVER=postgres docker compose --profile postgres up --build -d
+```
+
+postgres 服务不对外发布端口，仅在 compose 网络内可达；`modelhub` 会等它 healthy
+后再启动。改了 `POSTGRES_PASSWORD` 时，同时设置 `DATABASE_URL` 保持一致。
+
+> 注意：Dockerfile 会在 `deps` 阶段安装 `python3/make/g++` 以编译
+> `better-sqlite3`（alpine 无 musl 预编译包），运行镜像不含工具链。
+> 手动运行 `node .next/standalone/server.js` 时，需先
+> `cp -r .next/static .next/standalone/.next/static`，否则页面 chunk 404。
 
 ## 安全说明
 
-- `data.json` 与 `.env` 已在 `.gitignore` 中，绝不提交。
-- key 以 AES-256-GCM 加密落盘，解密仅在内存、仅用于服务端出站请求，永不进入 API 响应或日志。
+- `.env` 与 `data/`（含数据库）在 `.gitignore` 中，绝不提交。
+- 站点 API key 以 AES-256-GCM 加密落盘，解密仅在内存、仅用于服务端出站请求，
+  永不进入 API 响应或日志。
 - 主密钥丢失后已存 key 无法解密，需重新录入。
-- 私有工具，建议仅绑定 `localhost`，不要暴露到公网。控制台本身无鉴权，依赖网络边界保护。
+- 密码用 scrypt 哈希；会话为无状态 HMAC cookie，吊销靠 `users.token_version`。
+- 默认监听所有接口；私有部署建议 `npx next start -H 127.0.0.1`（compose 已绑 127.0.0.1），
+  不要暴露到公网。
+
+## 文档
+
+- 设计文档：`docs/design.md`
+- 架构决策记录：`docs/adr/0001..0013`
+- 术语表：`docs/glossary.md`
+- 提供商表单字段：`docs/PROVIDER_FORM.md`
+- v0.3 多租户升级计划：`docs/plan-v0.3-multitenant.md`

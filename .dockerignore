@@ -1,10 +1,33 @@
+# Dependencies and build output are produced inside the image.
 node_modules
 .next
+out
+
+# VCS + local tooling
 .git
+.gitignore
 coverage
 *.log
+tsconfig.tsbuildinfo
+
+# Local data (SQLite DB + legacy JSON) must never enter the image.
+data
+data-test
 data.json
+data.json.migrated
+dogfood-output
+
+# Secrets
 .env
-.env.local
+.env.*
+!.env.example
+
+# Docs and tests are not needed at runtime.
 docs
 tests
+reference
+
+# Docker metadata
+Dockerfile*
+docker-compose*.yml
+.dockerignore

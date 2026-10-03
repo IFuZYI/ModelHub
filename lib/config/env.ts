@@ -6,29 +6,41 @@ import { z } from "zod";
  * silently misbehaving.
  */
 
-const rawSchema = z.object({
-  MODELHUB_MASTER_KEY: z
-    .string()
-    .min(1, "MODELHUB_MASTER_KEY is required")
-    .optional(),
-  MODELHUB_ADMIN_PASSWORD: z.string().min(1).optional(),
-  MODELHUB_DATA_PATH: z.string().optional(),
-  DATABASE_DRIVER: z.enum(["sqlite", "postgres"]).optional(),
-  DATABASE_URL: z.string().min(1).optional(),
-  MODELHUB_REFRESH_INTERVAL_HOURS: z.coerce.number().positive().optional(),
-  MODELHUB_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
-  MODELHUB_FETCH_RETRIES: z.coerce.number().int().min(0).max(5).optional(),
-  MODELHUB_REFRESH_CONCURRENCY: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(32)
-    .optional(),
-  LOG_LEVEL: z
-    .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
-    .optional(),
-  NODE_ENV: z.string().optional(),
-});
+const rawSchema = z.preprocess(
+  // Docker Compose injects "" for unset interpolated vars; treat empty as unset
+  // so an unset DATABASE_URL (or any optional var) is not rejected.
+  (raw) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      out[k] = v === "" ? undefined : v;
+    }
+    return out;
+  },
+  z.object({
+    MODELHUB_MASTER_KEY: z
+      .string()
+      .min(1, "MODELHUB_MASTER_KEY is required")
+      .optional(),
+    MODELHUB_ADMIN_PASSWORD: z.string().min(1).optional(),
+    MODELHUB_DATA_PATH: z.string().optional(),
+    DATABASE_DRIVER: z.enum(["sqlite", "postgres"]).optional(),
+    DATABASE_URL: z.string().min(1).optional(),
+    MODELHUB_REFRESH_INTERVAL_HOURS: z.coerce.number().positive().optional(),
+    MODELHUB_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+    MODELHUB_FETCH_RETRIES: z.coerce.number().int().min(0).max(5).optional(),
+    MODELHUB_REFRESH_CONCURRENCY: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(32)
+      .optional(),
+    LOG_LEVEL: z
+      .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
+      .optional(),
+    NODE_ENV: z.string().optional(),
+  })
+);
 
 const parsed = rawSchema.safeParse(process.env);
 

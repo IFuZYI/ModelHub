@@ -1,18 +1,70 @@
+# ModelHub — Docker Compose deployment.
+#
+#   export MODELHUB_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+#   export MODELHUB_ADMIN_PASSWORD=your-password
+#   docker compose up --build -d
+#
+# Or put the two values in a .env file next to this file (compose reads it
+# automatically) and just run `docker compose up --build -d`.
+#
+# Default SQLite backend; add the postgres profile for PostgreSQL:
+#   docker compose --profile postgres up --build -d
+
 services:
   modelhub:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: modelhub:local
+    # Bind to loopback only — private tool, do not expose publicly.
+    # Host port is configurable via MODELHUB_PORT (default 3000).
     ports:
-      # bind to loopback only — private tool, do not expose publicly
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${MODELHUB_PORT:-3000}:3000"
     environment:
-      - NODE_ENV=production
-      - MODELHUB_MASTER_KEY=${MODELHUB_MASTER_KEY:?set MODELHUB_MASTER_KEY}
-      - MODELHUB_ADMIN_PASSWORD=${MODELHUB_ADMIN_PASSWORD:?set MODELHUB_ADMIN_PASSWORD}
-      - MODELHUB_DATA_PATH=/data
-      - LOG_LEVEL=info
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MODELHUB_DATA_PATH: /data
+      MODELHUB_MASTER_KEY: ${MODELHUB_MASTER_KEY:?set MODELHUB_MASTER_KEY (see README)}
+      MODELHUB_ADMIN_PASSWORD: ${MODELHUB_ADMIN_PASSWORD:?set MODELHUB_ADMIN_PASSWORD (see README)}
+      MODELHUB_REFRESH_INTERVAL_HOURS: ${MODELHUB_REFRESH_INTERVAL_HOURS:-6}
+      # Defaults to the bundled postgres service (only used when
+      # DATABASE_DRIVER=postgres). If you change POSTGRES_PASSWORD, set
+      # DATABASE_URL too so the credentials match.
+      DATABASE_DRIVER: ${DATABASE_DRIVER:-sqlite}
+      DATABASE_URL: ${DATABASE_URL:-postgres://modelhub:modelhub@postgres:5432/modelhub}
     volumes:
+      # SQLite database + legacy-import source. The image creates /data owned by
+      # the runtime user (uid 1001); a fresh named volume inherits that.
       - modelhub-data:/data
+    # Wait for postgres when that profile is active (optional: ignored otherwise).
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    # Forward signals to node so `docker compose stop` shuts down cleanly.
+    init: true
+    restart: unless-stopped
+
+  # Optional PostgreSQL backend. Enable with `--profile postgres` and set
+  # DATABASE_DRIVER=postgres (DATABASE_URL is filled in automatically below).
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: modelhub
+      # Not published to the host (compose-network only). Override in .env for
+      # production: POSTGRES_PASSWORD=...
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-modelhub}
+      POSTGRES_DB: modelhub
+    volumes:
+      - modelhub-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelhub -d modelhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:
   modelhub-data:
+  modelhub-pg:
