@@ -129,6 +129,12 @@ export {
   type ImportOptions,
   type ImportSummary,
 } from "./services/transferService";
+export {
+  inviteCodeService,
+  InviteCodeService,
+  type PoolCode,
+  type SitePool,
+} from "./services/inviteCodeService";
 
 // upstream adapters
 export { getAdapter, listAdapters, registerAdapter } from "./upstream";

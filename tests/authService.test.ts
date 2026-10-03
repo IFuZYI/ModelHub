@@ -32,6 +32,7 @@ function stubSettings(overrides: Partial<settingsMod.PublicSettings>) {
     personal_pages_enabled: false,
     key_share_enabled: false,
     key_share_consumers: "admin",
+    aff_blank_policy: "none",
     smtp_host: "",
     smtp_port: null,
     smtp_username: "",

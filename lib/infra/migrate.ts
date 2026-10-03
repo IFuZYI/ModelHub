@@ -3,6 +3,7 @@ import { migration0001Init } from "../../migrations/0001_init";
 import { migration0002EmailVerifications } from "../../migrations/0002_email_verifications";
 import { migration0003PerfIndexes } from "../../migrations/0003_perf_indexes";
 import { migration0004Blog } from "../../migrations/0004_blog";
+import { migration0005InviteCodes } from "../../migrations/0005_invite_codes";
 
 /** All migrations in version order. */
 export const migrations = [
@@ -10,6 +11,7 @@ export const migrations = [
   migration0002EmailVerifications,
   migration0003PerfIndexes,
   migration0004Blog,
+  migration0005InviteCodes,
 ] as const;
 
 /**

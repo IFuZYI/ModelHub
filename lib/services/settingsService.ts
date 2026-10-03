@@ -1,5 +1,6 @@
 import { getDatabase } from "../infra/db";
 import { SettingsRepository } from "../infra/repositories/settingsRepo";
+import type { AffBlankPolicy } from "../domain/provider";
 
 /**
  * System settings (ADR-0012). Non-secret values are JSON; the SMTP password is
@@ -15,6 +16,8 @@ export interface PublicSettings {
   personal_pages_enabled: boolean;
   key_share_enabled: boolean;
   key_share_consumers: KeyShareConsumers;
+  /** What a blank 邀请码 aff means: "none" (no code) or "random" (draw). */
+  aff_blank_policy: AffBlankPolicy;
   smtp_host: string;
   smtp_port: number | null;
   smtp_username: string;
@@ -30,6 +33,7 @@ const DEFAULTS: Omit<PublicSettings, "smtp_password_set"> = {
   personal_pages_enabled: false,
   key_share_enabled: false,
   key_share_consumers: "admin",
+  aff_blank_policy: "none",
   smtp_host: "",
   smtp_port: null,
   smtp_username: "",
@@ -45,6 +49,7 @@ export interface SettingsPatch {
   personal_pages_enabled?: boolean;
   key_share_enabled?: boolean;
   key_share_consumers?: KeyShareConsumers;
+  aff_blank_policy?: AffBlankPolicy;
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;
@@ -66,6 +71,7 @@ export class SettingsService {
       personal_pages_enabled,
       key_share_enabled,
       key_share_consumers,
+      aff_blank_policy,
       smtp_host,
       smtp_port,
       smtp_username,
@@ -84,6 +90,10 @@ export class SettingsService {
         "key_share_consumers",
         DEFAULTS.key_share_consumers
       ),
+      this.repo.get<AffBlankPolicy>(
+        "aff_blank_policy",
+        DEFAULTS.aff_blank_policy
+      ),
       this.repo.get("smtp_host", DEFAULTS.smtp_host),
       this.repo.get<number | null>("smtp_port", DEFAULTS.smtp_port),
       this.repo.get("smtp_username", DEFAULTS.smtp_username),
@@ -97,12 +107,21 @@ export class SettingsService {
       personal_pages_enabled,
       key_share_enabled,
       key_share_consumers,
+      aff_blank_policy,
       smtp_host,
       smtp_port,
       smtp_username,
       smtp_from,
       smtp_password_set: smtpPassword !== null,
     };
+  }
+
+  /** Blank-aff policy on its own (hot path: read per public page render). */
+  async getAffBlankPolicy(): Promise<AffBlankPolicy> {
+    return this.repo.get<AffBlankPolicy>(
+      "aff_blank_policy",
+      DEFAULTS.aff_blank_policy
+    );
   }
 
   async update(patch: SettingsPatch): Promise<PublicSettings> {
@@ -122,6 +141,8 @@ export class SettingsService {
       entries.push(["key_share_enabled", patch.key_share_enabled]);
     if (patch.key_share_consumers !== undefined)
       entries.push(["key_share_consumers", patch.key_share_consumers]);
+    if (patch.aff_blank_policy !== undefined)
+      entries.push(["aff_blank_policy", patch.aff_blank_policy]);
     if (patch.smtp_host !== undefined) entries.push(["smtp_host", patch.smtp_host]);
     if (patch.smtp_port !== undefined) entries.push(["smtp_port", patch.smtp_port]);
     if (patch.smtp_username !== undefined)

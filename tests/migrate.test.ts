@@ -21,7 +21,7 @@ describe("migrateDatabase", () => {
   it("creates the v0.3 relational foundation on SQLite", async () => {
     const db = memoryDb();
 
-    expect(await migrateDatabase(db)).toEqual([1, 2, 3, 4]);
+    expect(await migrateDatabase(db)).toEqual([1, 2, 3, 4, 5]);
 
     const tables = await db.introspection.getTables();
     expect(tables.map((table) => table.name).sort()).toEqual(
@@ -39,19 +39,21 @@ describe("migrateDatabase", () => {
         "user_profiles",
         "user_providers",
         "users",
+        "invite_codes",
       ].sort()
     );
 
     const applied = await db
       .selectFrom("schema_migrations")
       .select("version")
-      .orderBy("version")
+      .orderBy("version", "asc")
       .execute();
     expect(applied).toEqual([
       { version: 1 },
       { version: 2 },
       { version: 3 },
       { version: 4 },
+      { version: 5 },
     ]);
   });
 

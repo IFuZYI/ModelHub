@@ -29,6 +29,27 @@ export function categoryOf(type: ProviderType): ProviderCategory {
 }
 
 /**
+ * Sentinel stored in a provider's `aff_code` meaning "draw a code from the
+ * platform invite pool at render time" instead of using a fixed code
+ * (ADR-0015). Stored verbatim so the admin's intent survives edits; resolved
+ * per request by the public service.
+ */
+export const RANDOM_AFF_CODE = "RANDOM";
+
+/** True when the stored aff_code asks for a pool-drawn code. */
+export function isRandomAffCode(affCode: string | null | undefined): boolean {
+  return (affCode ?? "").trim().toUpperCase() === RANDOM_AFF_CODE;
+}
+
+/**
+ * What to do when a provider leaves 邀请码 aff blank (ADR-0015):
+ *   "none"   — no code, plain base_url (historic behaviour)
+ *   "random" — treat blank as RANDOM and draw from the pool
+ */
+export const AFF_BLANK_POLICIES = ["none", "random"] as const;
+export type AffBlankPolicy = (typeof AFF_BLANK_POLICIES)[number];
+
+/**
  * Canonical form of a provider base_url — the dedup / aggregation / key-pool
  * key (ADR-0010). Lowercase scheme+host, strip default ports, trailing `/`,
  * a trailing `/v1`, and any query/fragment. On unparseable input, fall back to

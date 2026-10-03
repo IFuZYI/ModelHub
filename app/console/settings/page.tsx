@@ -12,6 +12,7 @@ interface Settings {
   personal_pages_enabled: boolean;
   key_share_enabled: boolean;
   key_share_consumers: "admin" | "everyone";
+  aff_blank_policy: "none" | "random";
   smtp_host: string;
   smtp_port: number | null;
   smtp_username: string;
@@ -52,6 +53,75 @@ export default function AdminSettingsPage() {
   const [importNote, setImportNote] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ---- invite-code pool ----
+  const [pools, setPools] = useState<
+    { normalized_base_url: string; base_url: string; codes: { code: string; source: string; id: string | null; label: string | null }[] }[]
+  >([]);
+  const [newCodeUrl, setNewCodeUrl] = useState("");
+  const [newCodeValue, setNewCodeValue] = useState("");
+  const [newCodeNote, setNewCodeNote] = useState("");
+  const [poolBusy, setPoolBusy] = useState(false);
+  const [poolErr, setPoolErr] = useState<string | null>(null);
+  const [poolNote, setPoolNote] = useState<string | null>(null);
+
+  const loadPools = useCallback(async () => {
+    const res = await fetch("/api/admin/invite-codes", {
+      credentials: "same-origin",
+    });
+    if (!res.ok) return;
+    const json = await res.json();
+    setPools(json.pools ?? []);
+  }, []);
+
+  async function addPoolCode(e: React.FormEvent) {
+    e.preventDefault();
+    setPoolBusy(true);
+    setPoolErr(null);
+    setPoolNote(null);
+    try {
+      const res = await fetch("/api/admin/invite-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          base_url: newCodeUrl.trim(),
+          code: newCodeValue.trim(),
+          note: newCodeNote.trim() || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(apiErrorMessage(json, "添加失败"));
+      setNewCodeValue("");
+      setNewCodeNote("");
+      setPoolNote("已加入邀请码池 ✓");
+      await loadPools();
+    } catch (e2) {
+      setPoolErr(e2 instanceof Error ? e2.message : "添加失败");
+    } finally {
+      setPoolBusy(false);
+    }
+  }
+
+  async function removePoolCode(id: string) {
+    setPoolBusy(true);
+    setPoolErr(null);
+    try {
+      const res = await fetch(`/api/admin/invite-codes/${id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(apiErrorMessage(json, "删除失败"));
+      }
+      await loadPools();
+    } catch (e2) {
+      setPoolErr(e2 instanceof Error ? e2.message : "删除失败");
+    } finally {
+      setPoolBusy(false);
+    }
+  }
 
   const loadCounts = useCallback(async () => {
     const res = await fetch("/api/admin/transfer", { credentials: "same-origin" });
@@ -140,8 +210,9 @@ export default function AdminSettingsPage() {
     setS(json);
     setWhitelist(json.email_domain_whitelist.join(", "));
     await loadCounts();
+    await loadPools();
     setReady(true);
-  }, [loadCounts]);
+  }, [loadCounts, loadPools]);
 
   useEffect(() => {
     void load();
@@ -166,6 +237,7 @@ export default function AdminSettingsPage() {
       personal_pages_enabled: s.personal_pages_enabled,
       key_share_enabled: s.key_share_enabled,
       key_share_consumers: s.key_share_consumers,
+      aff_blank_policy: s.aff_blank_policy,
       smtp_host: s.smtp_host,
       smtp_username: s.smtp_username,
       smtp_from: s.smtp_from,
@@ -268,6 +340,29 @@ export default function AdminSettingsPage() {
           </section>
 
           <section className="panel">
+            <h2 className="panel-title">邀请码</h2>
+            <div className="field">
+              <label>站点「邀请码 aff」留空时的策略</label>
+              <Select
+                ariaLabel="邀请码留空策略"
+                value={s.aff_blank_policy}
+                onChange={(v) =>
+                  update("aff_blank_policy", v as "none" | "random")
+                }
+                options={[
+                  { value: "none", label: "不使用邀请码（链接不带 ?aff=）" },
+                  { value: "random", label: "随机：从平台邀请码池抽取" },
+                ]}
+              />
+              <p className="field-hint">
+                站点上填了具体邀请码时始终以填写的为准；填{" "}
+                <code>RANDOM</code> 时同样从池中随机抽取。个人分享页
+                <code>/p/&lt;slug&gt;</code> 始终展示站点主人自己的邀请码，不参与随机。
+              </p>
+            </div>
+          </section>
+
+          <section className="panel">
             <h2 className="panel-title">SMTP（邮件）</h2>
             <div className="field">
               <label>SMTP 主机</label>
@@ -307,6 +402,95 @@ export default function AdminSettingsPage() {
           )
         }
       </ConsoleShell>
+
+      {/* ---- invite-code pool (outside the settings form) ---- */}
+      {allowed && (
+        <section className="panel" style={{ marginTop: 24 }}>
+          <h2 className="panel-title">邀请码池</h2>
+          <p className="card-domain" style={{ marginTop: 0, lineHeight: 1.7 }}>
+            池子由两部分自动合并：<strong>用户在自己站点上填写的邀请码</strong>，
+            以及管理员在此处手动添加的邀请码。主页与站点详情页会从池中随机抽取一个展示；
+            个人分享页始终展示站点主人自己的邀请码。
+          </p>
+
+          {pools.length === 0 ? (
+            <div className="empty">还没有可用的邀请码。</div>
+          ) : (
+            pools.map((p) => (
+              <div key={p.normalized_base_url} className="admin-subgroup">
+                <div className="admin-subgroup-label">
+                  {p.base_url}
+                  <span className="admin-subgroup-count">{p.codes.length}</span>
+                </div>
+                <div className="tag-edit-list">
+                  {p.codes.map((c) => (
+                    <span
+                      key={c.code}
+                      className="tag-edit-item"
+                      title={
+                        c.source === "admin"
+                          ? `管理员添加${c.label ? `：${c.label}` : ""}`
+                          : `来自站点「${c.label ?? "?"}」`
+                      }
+                    >
+                      {c.code}
+                      <span className="card-domain" style={{ marginLeft: 6 }}>
+                        {c.source === "admin" ? "管理员" : c.label}
+                      </span>
+                      {c.source === "admin" && c.id && (
+                        <button
+                          type="button"
+                          onClick={() => removePoolCode(c.id!)}
+                          disabled={poolBusy}
+                          aria-label={`删除邀请码 ${c.code}`}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+
+          <form onSubmit={addPoolCode} style={{ marginTop: 16 }}>
+            <div className="field-row">
+              <div className="field">
+                <label>站点地址</label>
+                <input
+                  value={newCodeUrl}
+                  onChange={(e) => setNewCodeUrl(e.target.value)}
+                  placeholder="https://api.example.com"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>邀请码</label>
+                <input
+                  value={newCodeValue}
+                  onChange={(e) => setNewCodeValue(e.target.value)}
+                  placeholder="如 dl7w"
+                  required
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label>备注（可选）</label>
+              <input
+                value={newCodeNote}
+                onChange={(e) => setNewCodeNote(e.target.value)}
+                placeholder="如：站长自己的码"
+              />
+            </div>
+            {poolErr && <div className="error-box">{poolErr}</div>}
+            {poolNote && <div className="note-box">{poolNote}</div>}
+            <button type="submit" className="btn" disabled={poolBusy}>
+              {poolBusy ? "处理中…" : "添加到邀请码池"}
+            </button>
+          </form>
+        </section>
+      )}
 
       {/* ---- migration: export / import (outside the settings form) ---- */}
       {allowed && (

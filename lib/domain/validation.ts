@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { listAdapters } from "../upstream";
-import { FREE_TIERS } from "./provider";
+import { FREE_TIERS, AFF_BLANK_POLICIES } from "./provider";
 import { tagNamesSchema } from "./blog";
 import {
   usernameSchema,
@@ -178,6 +178,7 @@ export const settingsUpdateSchema = z
     personal_pages_enabled: z.boolean().optional(),
     key_share_enabled: z.boolean().optional(),
     key_share_consumers: z.enum(["admin", "everyone"]).optional(),
+    aff_blank_policy: z.enum(AFF_BLANK_POLICIES).optional(),
     smtp_host: z.string().trim().max(255).optional(),
     smtp_port: z.coerce.number().int().min(1).max(65535).optional(),
     smtp_username: z.string().trim().max(255).optional(),

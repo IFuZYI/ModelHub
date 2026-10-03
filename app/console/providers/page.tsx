@@ -1031,8 +1031,12 @@ export default function AdminPage() {
                             onChange={(e) =>
                               setForm({ ...form, aff_code: e.target.value })
                             }
-                            placeholder="如 XXX"
+                            placeholder="留空不拼邀请码；填 RANDOM 从平台邀请码池随机抽取"
                           />
+                          <p className="field-hint">
+                            填 <code>RANDOM</code>{" "}
+                            表示每次展示时从平台邀请码池随机取一个。
+                          </p>
                         </div>
                       </FormSection>
                     )}

@@ -32,7 +32,10 @@ AI API 站点目录平台。用户各自维护自己的 API 站点与实时模�
 ### 管理
 
 - 用户管理：建号、改角色、禁用 / 启用、删除
-- 系统设置：注册开关、邮箱验证、SMTP、个人页开关、key 共享
+- 系统设置：注册开关、邮箱验证、SMTP、个人页开关、key 共享、邀请码留空策略
+- 邀请码池：自动汇总「用户站点上填的邀请码 + 管理员登记的邀请码」，主页与详情页随机抽取展示，
+  个人分享页始终展示站点主人自己的码。站点侧填 `RANDOM` 即从池中随机。
+  见 [ADR-0015](docs/adr/0015-invite-code-pool.md)
 - 全服统计：按 `normalized_base_url` 聚合的全服站点视图，可一键收编
 - 数据迁移：整站导出 / 导入（用户、站点、模型缓存、标签、评分、评论、统计、设置），
   用于换服务器；用户密码以哈希携带，迁移后无需重置。见 [ADR-0014](docs/adr/0014-data-transfer.md)
@@ -114,13 +117,13 @@ lib/upstream/**       模型来源适配器：openaiCompatible / spullara / mode
 - 版本化迁移：`migrations/0001..0004`，按 version 幂等应用
 - 结构化日志（pino，自动脱敏 key）：`lib/infra/logger.ts`
 - 健康检查：`GET /api/health`
-- 测试：21 个文件 / 139 用例（`tests/`）
+- 测试：23 个文件 / 158 用例（`tests/`）
 
-### 数据模型（迁移 0001–0004）
+### 数据模型（迁移 0001–0005）
 
 `users`、`user_providers`、`model_caches`、`provider_stats`、`key_pool`、`settings`
 （以上 0001）；`email_verifications`（0002）；`user_profiles`、`tags` + `provider_tags`、
-`ratings`、`comments`（0004）。0003 仅新增性能索引，不建表。
+`ratings`、`comments`（0004）；`invite_codes`（0005）。0003 仅新增性能索引，不建表。
 
 标签写操作在进程内串行（`globalThis` 锁链）并在 Postgres 上取事务级 advisory
 lock，避免并发写死锁或静默丢链。
@@ -171,6 +174,8 @@ lock，避免并发写死锁或静默丢链。
 | GET | `/api/admin/transfer` | 各表行数（迁移面板用） |
 | GET | `/api/admin/transfer/export` | 导出整站数据（`?secrets=1` 含密钥） |
 | POST | `/api/admin/transfer/import` | 导入（`?mode=merge\|replace`） |
+| GET/POST | `/api/admin/invite-codes` | 邀请码池列表 / 登记邀请码 |
+| DELETE | `/api/admin/invite-codes/:id` | 删除管理员登记的邀请码 |
 
 所有错误响应统一信封：`{ error: { code, message, details? } }`；校验失败时
 `message` 会带具体字段原因（如「密码：密码至少 8 位」）。
@@ -251,7 +256,7 @@ postgres 服务不对外发布端口，仅在 compose 网络内可达；`modelhu
 ## 文档
 
 - 设计文档：`docs/design.md`
-- 架构决策记录：`docs/adr/0001..0014`
+- 架构决策记录：`docs/adr/0001..0015`
 - 术语表：`docs/glossary.md`
 - 提供商表单字段：`docs/PROVIDER_FORM.md`
 - v0.3 多租户升级计划：`docs/plan-v0.3-multitenant.md`

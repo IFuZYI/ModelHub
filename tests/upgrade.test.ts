@@ -71,9 +71,9 @@ describe("v0.3 → v0.4 upgrade path", () => {
       })
       .execute();
 
-    // Phase 2 — the full migrator runs; only the new version is applied.
+    // Phase 2 — the full migrator runs; only the newer versions are applied.
     const ran = await migrateDatabase(db);
-    expect(ran).toEqual([4]);
+    expect(ran).toEqual([4, 5]);
 
     // Existing data intact.
     const user = await db

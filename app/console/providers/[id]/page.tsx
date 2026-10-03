@@ -295,7 +295,14 @@ export default function EditProviderPage({
           {type === "newapi" && (
             <div className="field">
               <label>邀请码 aff（可选）</label>
-              <input value={affCode} onChange={(e) => setAffCode(e.target.value)} />
+              <input
+                value={affCode}
+                onChange={(e) => setAffCode(e.target.value)}
+                placeholder="留空不拼邀请码；填 RANDOM 从平台邀请码池随机抽取"
+              />
+              <p className="field-hint">
+                填 <code>RANDOM</code> 表示每次展示时从平台邀请码池随机取一个。
+              </p>
             </div>
           )}
           {(type === "custom" || type === "newapi") && (

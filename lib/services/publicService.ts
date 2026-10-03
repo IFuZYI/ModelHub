@@ -6,9 +6,18 @@ import { TagRepository } from "../infra/repositories/tagRepo";
 import { RatingRepository } from "../infra/repositories/ratingRepo";
 import { CommentRepository } from "../infra/repositories/commentRepo";
 import { AppError } from "../domain/errors";
-import { buildInviteUrl, type ProviderType, type FreeTier } from "../domain/provider";
+import {
+  buildInviteUrl,
+  isRandomAffCode,
+  normalizeBaseUrl,
+  type AffBlankPolicy,
+  type ProviderType,
+  type FreeTier,
+} from "../domain/provider";
 import { modelDedupeKey } from "../domain/vendor";
 import type { CommentView, RatingSummary } from "../domain/blog";
+import { inviteCodeService, InviteCodeService } from "./inviteCodeService";
+import { settingsService } from "./settingsService";
 
 /** Public, read-only projection of a provider for guests (no key material). */
 export interface PublicProvider {
@@ -72,6 +81,7 @@ export class PublicService {
   private readonly tags: TagRepository;
   private readonly ratings: RatingRepository;
   private readonly comments: CommentRepository;
+  private readonly invites: InviteCodeService;
 
   constructor(
     providers = new UserProviderRepository(getDatabase()),
@@ -79,7 +89,8 @@ export class PublicService {
     profiles = new UserProfileRepository(getDatabase()),
     tags = new TagRepository(getDatabase()),
     ratings = new RatingRepository(getDatabase()),
-    comments = new CommentRepository(getDatabase())
+    comments = new CommentRepository(getDatabase()),
+    invites: InviteCodeService = inviteCodeService
   ) {
     this.providers = providers;
     this.users = users;
@@ -87,6 +98,37 @@ export class PublicService {
     this.tags = tags;
     this.ratings = ratings;
     this.comments = comments;
+    this.invites = invites;
+  }
+
+  /**
+   * Resolve the invite URL for one provider (ADR-0015).
+   *
+   * A provider either carries a fixed aff code, or asks for a pool-drawn one
+   * via the RANDOM sentinel — or is blank while the blank-policy setting is
+   * "random". The draw is seeded per call so every provider on ONE page that
+   * points at the same site shows the SAME code (consistent page), while
+   * different page loads vary (which is the point of a random draw).
+   *
+   * `scopedToSite` is false on a personal page, where the owner's own code is
+   * shown verbatim instead of a platform-wide random draw.
+   */
+  private async resolveInviteUrl(
+    baseUrl: string,
+    affCode: string | null,
+    opts: { seed: string; blankPolicy: AffBlankPolicy; usePool: boolean }
+  ): Promise<string> {
+    const wantsRandom =
+      isRandomAffCode(affCode) ||
+      (!affCode?.trim() && opts.blankPolicy === "random");
+    if (!wantsRandom || !opts.usePool) {
+      // A blank code with policy "none" (or a personal page) stays code-less.
+      const fixed = isRandomAffCode(affCode) ? null : affCode;
+      return buildInviteUrl(baseUrl, fixed) ?? baseUrl;
+    }
+    const drawn = await this.invites.draw(normalizeBaseUrl(baseUrl), opts.seed);
+    // No eligible code: fall back to a plain link rather than a broken one.
+    return buildInviteUrl(baseUrl, drawn) ?? baseUrl;
   }
 
   private async assemble(
@@ -102,7 +144,8 @@ export class PublicService {
       register_methods: string[];
       models: string[];
       user_id: string;
-    }[]
+    }[],
+    opts: { seed: string; blankPolicy: AffBlankPolicy; usePool: boolean }
   ): Promise<PublicProvider[]> {
     const ids = owned.map((p) => p.id);
     const ownerIds = owned.map((p) => p.user_id);
@@ -116,6 +159,18 @@ export class PublicService {
       this.profiles.getMany(ownerIds),
     ]);
     const usersById = new Map(users.map((u) => [u.id, u]));
+    // Invite URLs are resolved together so every entry pointing at one site
+    // shows the same drawn code within this page.
+    const inviteUrls = new Map<string, string>();
+    await Promise.all(
+      owned.map(async (p) => {
+        if (inviteUrls.has(p.id)) return;
+        inviteUrls.set(
+          p.id,
+          await this.resolveInviteUrl(p.base_url, p.aff_code, opts)
+        );
+      })
+    );
     return owned.map((p) => {
       const user = usersById.get(p.user_id);
       const profile = profiles.get(p.user_id);
@@ -128,7 +183,7 @@ export class PublicService {
         free_tier: p.free_tier,
         icon: p.icon,
         aff_code: p.aff_code,
-        invite_url: buildInviteUrl(p.base_url, p.aff_code),
+        invite_url: inviteUrls.get(p.id) ?? buildInviteUrl(p.base_url, p.aff_code),
         model_count: p.models.length,
         register_methods: p.register_methods,
         author: user
@@ -170,6 +225,11 @@ export class PublicService {
     return users.find((u) => u.role === "admin" && u.status === "active");
   }
 
+  /** Current blank-aff policy (ADR-0015); "none" when unset. */
+  private async blankPolicy(): Promise<AffBlankPolicy> {
+    return settingsService.getAffBlankPolicy();
+  }
+
   /** Homepage: the primary admin's providers (summaries). */
   async homepage(): Promise<{
     providers: PublicProvider[];
@@ -177,8 +237,17 @@ export class PublicService {
   }> {
     const admin = await this.firstAdmin();
     if (!admin) return { providers: [], total_model_count: 0 };
-    const owned = await this.providers.listByUser(admin.id);
-    const assembled = await this.assemble(owned);
+    const [owned, blankPolicy] = await Promise.all([
+      this.providers.listByUser(admin.id),
+      this.blankPolicy(),
+    ]);
+    // The public directory draws from the platform pool, so every visitor sees
+    // a live referral code rather than whatever the admin typed.
+    const assembled = await this.assemble(owned, {
+      seed: new Date().toISOString().slice(0, 13), // stable within the hour
+      blankPolicy,
+      usePool: true,
+    });
     return this.summarize(
       assembled,
       owned.map((p) => p.models)
@@ -191,8 +260,17 @@ export class PublicService {
     if (!user || user.status !== "active") {
       throw AppError.notFound("Page not found");
     }
-    const owned = await this.providers.listByUser(user.id);
-    const assembled = await this.assemble(owned);
+    const [owned, blankPolicy] = await Promise.all([
+      this.providers.listByUser(user.id),
+      this.blankPolicy(),
+    ]);
+    // A personal page shows the owner's OWN code — it is their page, so
+    // drawing someone else's referral code there would be wrong.
+    const assembled = await this.assemble(owned, {
+      seed: user.id,
+      blankPolicy,
+      usePool: false,
+    });
     const { providers, total_model_count } = this.summarize(
       assembled,
       owned.map((p) => p.models)
@@ -247,7 +325,12 @@ export class PublicService {
     if (!owner || owner.status !== "active") {
       throw AppError.notFound("Provider not found");
     }
-    const [assembled] = await this.assemble([p]);
+    const [assembled] = await this.assemble([p], {
+      seed: p.id,
+      blankPolicy: await this.blankPolicy(),
+      // A detail view is public, so it draws like the directory does.
+      usePool: true,
+    });
     const comments = await this.comments.listForProvider(id);
     return {
       ...assembled,

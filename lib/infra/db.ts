@@ -124,6 +124,13 @@ export interface DatabaseSchema {
     created_at: string;
     updated_at: string;
   };
+  invite_codes: {
+    id: string;
+    code: string;
+    normalized_base_url: string;
+    note: string | null;
+    created_at: string;
+  };
 }
 
 export type AppDatabase = Kysely<DatabaseSchema>;

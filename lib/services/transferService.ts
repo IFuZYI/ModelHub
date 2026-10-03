@@ -41,6 +41,7 @@ const INSERT_ORDER = [
   "comments",
   "provider_stats",
   "key_pool",
+  "invite_codes",
   "settings",
 ] as const;
 
@@ -58,6 +59,7 @@ const PRIMARY_KEY: Record<TableName, string | null> = {
   comments: "id",
   provider_stats: "normalized_base_url",
   key_pool: "id",
+  invite_codes: "id",
   settings: "key",
 };
 
@@ -105,6 +107,8 @@ const COMPOSITE_KEYS: Partial<Record<TableName, string[][]>> = {
   ratings: [["user_provider_id", "user_id"]],
   // One pool key per (url, contributor).
   key_pool: [["normalized_base_url", "contributor_user_id"]],
+  // A code is unique per site.
+  invite_codes: [["normalized_base_url", "code"]],
 };
 
 export interface ImportSummary {
@@ -190,6 +194,7 @@ const REQUIRED: Record<TableName, string[]> = {
     "fail_count",
     "updated_at",
   ],
+  invite_codes: ["id", "code", "normalized_base_url", "created_at"],
   settings: ["key", "value"],
 };
 
@@ -604,6 +609,14 @@ export class TransferService {
         n++;
       }
       imported.key_pool = n;
+
+      // invite_codes: admin-registered pool codes (no parent rows to resolve).
+      n = 0;
+      for (const row of incoming.invite_codes) {
+        await upsert("invite_codes", row);
+        n++;
+      }
+      imported.invite_codes = n;
 
       n = 0;
       for (const row of incoming.settings) {
