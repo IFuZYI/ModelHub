@@ -149,6 +149,21 @@ describe("InviteCodeService", () => {
     await expect(svc.addCode(SITE, "   ", null)).rejects.toThrow(/不能为空/);
   });
 
+  it("rejects codes that could not be used as an aff code", async () => {
+    const db = await freshDb();
+    const svc = service(db);
+    // A pooled code ends up in ?aff=<code>, so it must satisfy the same
+    // charset as a provider's aff_code — otherwise the pool accepts values
+    // the rest of the system rejects, and a URL-injection payload
+    // (&, =, #, ?) or a lone surrogate gets stored and served.
+    for (const bad of ["a&b", "a=b", "a#b", "a?b", "a b", "a/b", "\uD800", "码"]) {
+      await expect(svc.addCode(SITE, bad, null)).rejects.toMatchObject({
+        code: "VALIDATION",
+      });
+    }
+    expect(await svc.codesForUrl(normalizeBaseUrl(SITE))).toHaveLength(0);
+  });
+
   it("draw returns null when the pool is empty, else an eligible code", async () => {
     const db = await freshDb();
     const svc = service(db);

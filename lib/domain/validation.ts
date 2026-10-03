@@ -27,14 +27,18 @@ const baseUrlSchema = z
   });
 
 // newapi invite/referral code — appended as ?aff=<code>. Optional.
+//
+// This charset is the single source of truth for aff codes: the provider
+// form AND the platform invite-code pool both validate against it, because a
+// pooled code is served in the same ?aff= slot. Keep them in sync via
+// AFF_CODE_PATTERN rather than duplicating the regex.
+export const AFF_CODE_PATTERN = /^[A-Za-z0-9_-]*$/;
+export const AFF_CODE_MESSAGE = "aff_code may contain only letters, digits, - and _";
 const affCodeSchema = z
   .string()
   .trim()
   .max(120)
-  .regex(
-    /^[A-Za-z0-9_-]*$/,
-    "aff_code may contain only letters, digits, - and _"
-  );
+  .regex(AFF_CODE_PATTERN, AFF_CODE_MESSAGE);
 
 // Display glyph/emoji for the avatar OR icon URL.
 const iconSchema = z.string().trim().max(300);

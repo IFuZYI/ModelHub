@@ -2,6 +2,7 @@ import { getDatabase } from "../infra/db";
 import { InviteCodeRepository } from "../infra/repositories/inviteCodeRepo";
 import { UserProviderRepository } from "../infra/repositories/userProviderRepo";
 import { normalizeBaseUrl } from "../domain/provider";
+import { AFF_CODE_PATTERN, AFF_CODE_MESSAGE } from "../domain/validation";
 import { AppError } from "../domain/errors";
 import { logger } from "../infra/logger";
 
@@ -186,6 +187,13 @@ export class InviteCodeService {
     if (!trimmed) throw AppError.validation("邀请码不能为空");
     if (trimmed.toUpperCase() === "RANDOM") {
       throw AppError.validation("RANDOM 是保留值，不能作为邀请码");
+    }
+    // A pooled code is served in the same ?aff= slot as a provider's own
+    // aff_code, so it must satisfy the same charset. Without this the pool
+    // accepts values the rest of the system rejects (URL metacharacters, a
+    // lone surrogate, non-ASCII) and then serves them.
+    if (!AFF_CODE_PATTERN.test(trimmed)) {
+      throw AppError.validation(`邀请码格式不合法：${AFF_CODE_MESSAGE}`);
     }
     await this.pool.add(normalized, trimmed, note);
     logger.info({ normalized, code: trimmed }, "invite code registered");
