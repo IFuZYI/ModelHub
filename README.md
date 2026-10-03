@@ -114,10 +114,10 @@ lib/upstream/**       模型来源适配器：openaiCompatible / spullara / mode
 ```
 
 - 配置集中校验（zod，fail-fast）：`lib/config/env.ts`
-- 版本化迁移：`migrations/0001..0004`，按 version 幂等应用
+- 版本化迁移：`migrations/0001..0005`，按 version 幂等应用
 - 结构化日志（pino，自动脱敏 key）：`lib/infra/logger.ts`
 - 健康检查：`GET /api/health`
-- 测试：23 个文件 / 158 用例（`tests/`）
+- 测试：29 个文件 / 199 用例（`tests/`）
 
 ### 数据模型（迁移 0001–0005）
 
@@ -193,9 +193,9 @@ lock，避免并发写死锁或静默丢链。
 | `MODELHUB_DATA_PATH` | `./data` | SQLite 数据目录（或 `.db` 路径） |
 | `DATABASE_DRIVER` | `sqlite` | `sqlite` \| `postgres` |
 | `DATABASE_URL` | — | postgres 连接串（driver=postgres 时必填） |
-| `MODELHUB_ADMIN_PATH` | `/admin` | 自定义后台路径（仅混淆 URL，非鉴权） |
 | `MODELHUB_REFRESH_INTERVAL_HOURS` | `6` | 自动刷新间隔 |
 | `MODELHUB_FETCH_TIMEOUT_MS` / `MODELHUB_FETCH_RETRIES` / `MODELHUB_REFRESH_CONCURRENCY` | `15000` / `2` / `4` | 抓取超时 / 重试 / 并发调优 |
+| `MODELHUB_ALLOW_PRIVATE_FETCH` | 关 | 允许探测回环 / 内网地址（自托管场景探测 LAN 上的中转站时才开）。默认关闭，因为任何登录用户都能借站点导入 / 刷新触发服务端请求，开放后会成为 SSRF 通道（可探 169.254.169.254 等） |
 | `LOG_LEVEL` | `debug`（生产 `info`） | 日志级别 |
 
 ## 脚本
@@ -207,8 +207,20 @@ npm start            # 启动生产服务
 npm run typecheck    # tsc 类型检查
 npm run lint         # ESLint
 npm run format       # Prettier 格式化
-npm test             # vitest 单元测试
+npm run test         # vitest 单元测试（29 文件 / 199 用例）
 ```
+
+运维 / 审计辅助脚本（`scripts/`）：
+
+| 脚本 | 用途 |
+|---|---|
+| `api-sweep.mjs` | 43 项 API 探针：鉴权、入参校验、错误码（`node scripts/api-sweep.mjs <url> <user> <pass>`） |
+| `ui_checks.py` | UI 布局 / 对比度 / 表单标签测量 |
+| `ui_theme_responsive.py` | 浅色主题 AA + 导航可达性 |
+| `ui_interactions.py` | 焦点 / 键盘 / 删除确认 |
+| `associate_labels.py` | 批量给 JSX 补 `htmlFor`+`id` |
+| `seed-official.mjs` | 把内置官方站点预设写入运行中的实例（幂等） |
+| `run-test-env.sh` | 启动本地测试实例（端口 9000） |
 
 ## Docker 部署
 
@@ -250,6 +262,12 @@ postgres 服务不对外发布端口，仅在 compose 网络内可达；`modelhu
   永不进入 API 响应或日志。
 - 主密钥丢失后已存 key 无法解密，需重新录入。
 - 密码用 scrypt 哈希；会话为无状态 HMAC cookie，吊销靠 `users.token_version`。
+- **SSRF 防护**：站点导入与刷新会请求用户填写的 URL，因此默认拒绝回环 / 内网 /
+  链路本地地址（含云元数据 `169.254.169.254`）。自托管需要探测 LAN 中转站时用
+  `MODELHUB_ALLOW_PRIVATE_FETCH=true` 显式放行。
+- 登录对不存在的用户名也执行一次哈希校验，避免用响应时间枚举账号。
+- 导入整站数据时，`smtp_password` 等密钥列一律重新加密落盘（即便文件里是明文）；
+  覆盖导入前校验文件中至少存在一个密码哈希可用的管理员，避免导入后无人能登录。
 - 默认监听所有接口；私有部署建议 `npx next start -H 127.0.0.1`（compose 已绑 127.0.0.1），
   不要暴露到公网。
 
@@ -260,3 +278,16 @@ postgres 服务不对外发布端口，仅在 compose 网络内可达；`modelhu
 - 术语表：`docs/glossary.md`
 - 提供商表单字段：`docs/PROVIDER_FORM.md`
 - v0.3 多租户升级计划：`docs/plan-v0.3-multitenant.md`
+
+## UI 质量
+
+UI 有一组可复跑的测量式检查（不是截图目测），改动界面后建议跑一遍：
+
+```bash
+python3 scripts/ui_checks.py            # 布局 / 对比度 / 表单标签（12 页 × 5 视口）
+python3 scripts/ui_theme_responsive.py  # 浅色主题 WCAG AA + 320→1440 导航可达性
+python3 scripts/ui_interactions.py      # 焦点可见性 / 键盘 / 删除确认
+```
+
+源码级回归由 `tests/a11yLabels.test.ts`（每个 label 必须关联控件）和
+`tests/confirmDialog.test.ts`（禁止原生 `confirm`/`alert`）覆盖。
