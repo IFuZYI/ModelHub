@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { fetchAuthStatus, apiErrorMessage } from "../../lib/api";
 
 interface Settings {
@@ -39,6 +40,7 @@ export default function AdminSettingsPage() {
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
   const [s, setS] = useState<Settings | null>(null);
+  const [pendingReplaceImport, setPendingReplaceImport] = useState(false);
   const [whitelist, setWhitelist] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
   const [saved, setSaved] = useState(false);
@@ -161,14 +163,15 @@ export default function AdminSettingsPage() {
   async function doImport() {
     const file = fileRef.current?.files?.[0];
     if (!file) return;
-    if (
-      importMode === "replace" &&
-      !confirm(
-        "覆盖导入会先清空本服务器的用户、站点、评论、评分等数据，再写入文件内容。此操作不可撤销，确定继续？"
-      )
-    ) {
+    if (importMode === "replace") {
+      setPendingReplaceImport(true);
       return;
     }
+    await runImport(file);
+  }
+
+  async function runImport(file: File) {
+    setPendingReplaceImport(false);
     setImporting(true);
     setImportErr(null);
     setImportNote(null);
@@ -294,8 +297,8 @@ export default function AdminSettingsPage() {
               注册需要邮箱验证
             </label>
             <div className="field">
-              <label>邮箱域名白名单（逗号分隔，留空不限制）</label>
-              <input
+              <label htmlFor="settings-297">邮箱域名白名单（逗号分隔，留空不限制）</label>
+              <input id="settings-297"
                 value={whitelist}
                 onChange={(e) => setWhitelist(e.target.value)}
                 placeholder="example.com, company.org"
@@ -326,8 +329,8 @@ export default function AdminSettingsPage() {
               启用密钥共享池（仅用于探测模型）
             </label>
             <div className="field">
-              <label>可消费共享池的角色</label>
-              <Select
+              <label htmlFor="settings-329">可消费共享池的角色</label>
+              <Select id="settings-329"
                 ariaLabel="共享池消费者"
                 value={s.key_share_consumers}
                 onChange={(v) => update("key_share_consumers", v as "admin" | "everyone")}
@@ -342,8 +345,8 @@ export default function AdminSettingsPage() {
           <section className="panel">
             <h2 className="panel-title">邀请码</h2>
             <div className="field">
-              <label>站点「邀请码 aff」留空时的策略</label>
-              <Select
+              <label htmlFor="settings-345">站点「邀请码 aff」留空时的策略</label>
+              <Select id="settings-345"
                 ariaLabel="邀请码留空策略"
                 value={s.aff_blank_policy}
                 onChange={(v) =>
@@ -365,24 +368,24 @@ export default function AdminSettingsPage() {
           <section className="panel">
             <h2 className="panel-title">SMTP（邮件）</h2>
             <div className="field">
-              <label>SMTP 主机</label>
-              <input value={s.smtp_host} onChange={(e) => update("smtp_host", e.target.value)} />
+              <label htmlFor="settings-368">SMTP 主机</label>
+              <input id="settings-368" value={s.smtp_host} onChange={(e) => update("smtp_host", e.target.value)} />
             </div>
             <div className="field">
-              <label>端口（465 隐式 TLS）</label>
-              <input
+              <label htmlFor="settings-372">端口（465 隐式 TLS）</label>
+              <input id="settings-372"
                 type="number"
                 value={s.smtp_port ?? ""}
                 onChange={(e) => update("smtp_port", e.target.value ? Number(e.target.value) : null)}
               />
             </div>
             <div className="field">
-              <label>用户名</label>
-              <input value={s.smtp_username} onChange={(e) => update("smtp_username", e.target.value)} />
+              <label htmlFor="settings-380">用户名</label>
+              <input id="settings-380" value={s.smtp_username} onChange={(e) => update("smtp_username", e.target.value)} />
             </div>
             <div className="field">
-              <label>密码{s.smtp_password_set ? "（已设置，留空保持不变）" : ""}</label>
-              <input
+              <label htmlFor="settings-384">密码{s.smtp_password_set ? "（已设置，留空保持不变）" : ""}</label>
+              <input id="settings-384"
                 type="password"
                 value={smtpPassword}
                 onChange={(e) => setSmtpPassword(e.target.value)}
@@ -390,8 +393,8 @@ export default function AdminSettingsPage() {
               />
             </div>
             <div className="field">
-              <label>发件人地址</label>
-              <input value={s.smtp_from} onChange={(e) => update("smtp_from", e.target.value)} />
+              <label htmlFor="settings-393">发件人地址</label>
+              <input id="settings-393" value={s.smtp_from} onChange={(e) => update("smtp_from", e.target.value)} />
             </div>
           </section>
 
@@ -457,8 +460,8 @@ export default function AdminSettingsPage() {
           <form onSubmit={addPoolCode} style={{ marginTop: 16 }}>
             <div className="field-row">
               <div className="field">
-                <label>站点地址</label>
-                <input
+                <label htmlFor="settings-460">站点地址</label>
+                <input id="settings-460"
                   value={newCodeUrl}
                   onChange={(e) => setNewCodeUrl(e.target.value)}
                   placeholder="https://api.example.com"
@@ -466,8 +469,8 @@ export default function AdminSettingsPage() {
                 />
               </div>
               <div className="field">
-                <label>邀请码</label>
-                <input
+                <label htmlFor="settings-469">邀请码</label>
+                <input id="settings-469"
                   value={newCodeValue}
                   onChange={(e) => setNewCodeValue(e.target.value)}
                   placeholder="如 dl7w"
@@ -476,8 +479,8 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div className="field">
-              <label>备注（可选）</label>
-              <input
+              <label htmlFor="settings-479">备注（可选）</label>
+              <input id="settings-479"
                 value={newCodeNote}
                 onChange={(e) => setNewCodeNote(e.target.value)}
                 placeholder="如：站长自己的码"
@@ -512,7 +515,7 @@ export default function AdminSettingsPage() {
           )}
 
           <div className="field">
-            <label>导出</label>
+            <h3 className="field-heading">导出</h3>
             <label className="toggle-row">
               <input
                 type="checkbox"
@@ -532,11 +535,11 @@ export default function AdminSettingsPage() {
           </div>
 
           <div className="field" style={{ marginTop: 20 }}>
-            <label>导入</label>
+            <h3 className="field-heading">导入</h3>
             <div className="field-row">
               <div className="field">
-                <label>导入方式</label>
-                <Select
+                <label htmlFor="settings-538">导入方式</label>
+                <Select id="settings-538"
                   ariaLabel="导入方式"
                   value={importMode}
                   onChange={(v) => setImportMode(v as "merge" | "replace")}
@@ -551,6 +554,7 @@ export default function AdminSettingsPage() {
               ref={fileRef}
               type="file"
               accept="application/json,.json"
+              aria-label="选择要导入的 JSON 文件"
               className="model-textarea"
               style={{ paddingTop: 10 }}
             />
@@ -569,6 +573,19 @@ export default function AdminSettingsPage() {
           {importNote && <div className="note-box">{importNote}</div>}
         </section>
       )}
+
+      <ConfirmDialog
+        open={pendingReplaceImport}
+        title="覆盖导入？"
+        body="覆盖导入会先清空本服务器的用户、站点、评论、评分等数据，再写入文件内容。此操作不可撤销。"
+        confirmLabel="确认覆盖"
+        busy={importing}
+        onConfirm={() => {
+          const file = fileRef.current?.files?.[0];
+          if (file) void runImport(file);
+        }}
+        onCancel={() => setPendingReplaceImport(false)}
+      />
     </>
   );
 }

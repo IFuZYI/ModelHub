@@ -49,8 +49,8 @@ export default function AccountSecurityPage() {
           <h2 className="panel-title">修改密码</h2>
           <form onSubmit={changePassword} className="settings-form">
             <div className="field">
-              <label>当前密码</label>
-              <input
+              <label htmlFor="account-52">当前密码</label>
+              <input id="account-52"
                 type="password"
                 value={curPwd}
                 onChange={(e) => setCurPwd(e.target.value)}
@@ -58,8 +58,8 @@ export default function AccountSecurityPage() {
               />
             </div>
             <div className="field">
-              <label>新密码（至少 8 位）</label>
-              <input
+              <label htmlFor="account-61">新密码（至少 8 位）</label>
+              <input id="account-61"
                 type="password"
                 value={newPwd}
                 onChange={(e) => setNewPwd(e.target.value)}

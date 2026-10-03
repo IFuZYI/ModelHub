@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { TypeBadge, StatusDot } from "../../components/badges";
 import ProviderAvatar from "../../components/ProviderAvatar";
 import { fetchAuthStatus, importNewapiSite, apiErrorMessage } from "../../lib/api";
@@ -142,9 +143,10 @@ function TagsField({
 
   return (
     <div className="field">
-      <label>标签（可选，逗号分隔，最多 12 个）</label>
+      <label htmlFor="tag-input">标签（可选，逗号分隔，最多 12 个）</label>
       <div className="tag-input-row">
         <input
+          id="tag-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -229,6 +231,8 @@ export default function AdminPage() {
   const [providers, setProviders] = useState<ProviderView[]>([]);
   /** Active type filter on the site list; "all" keeps the grouped view. */
   const [typeFilter, setTypeFilter] = useState<ProviderType | "all">("all");
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [flow, setFlow] = useState<Flow>("menu");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -490,9 +494,20 @@ export default function AdminPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm("确定删除这个提供商？")) return;
-    await fetch(`/api/providers/${id}`, { method: "DELETE" });
-    await loadProviders();
+    setPendingDelete(id);
+  }
+
+  async function confirmDelete() {
+    const id = pendingDelete;
+    if (!id) return;
+    setDeleteBusy(true);
+    try {
+      await fetch(`/api/providers/${id}`, { method: "DELETE" });
+      await loadProviders();
+      setPendingDelete(null);
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   // ---- grouped admin listing: 官方(原生/中转) / 其他(NewAPI/自建) ----
@@ -650,6 +665,15 @@ export default function AdminPage() {
           </>
         )}
       </ConsoleShell>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="删除这个站点？"
+        body="站点配置与模型缓存将被移除，此操作无法撤销。"
+        busy={deleteBusy}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
 
       {showModal && (
         <div className="modal-overlay" onClick={closeModal}>
@@ -837,8 +861,8 @@ export default function AdminPage() {
                 <div className="modal-scroll">
                   <form id="newapi-import-form" onSubmit={runImport}>
                     <div className="field">
-                      <label>站点链接（首页 / 注册链接 / 含 ?aff= 均可）</label>
-                      <input
+                      <label htmlFor="providers-840">站点链接（首页 / 注册链接 / 含 ?aff= 均可）</label>
+                      <input id="providers-840"
                         value={importUrl}
                         onChange={(e) => setImportUrl(e.target.value)}
                         placeholder="https://api.example.top/sign-up?aff=XXXX"
@@ -928,8 +952,8 @@ export default function AdminPage() {
                       </div>
                     )}
                     <div className="field">
-                      <label>名称</label>
-                      <input
+                      <label htmlFor="providers-931">名称</label>
+                      <input id="providers-931"
                         value={form.name}
                         onChange={(e) =>
                           setForm({ ...form, name: e.target.value })
@@ -939,7 +963,7 @@ export default function AdminPage() {
                       />
                     </div>
                     <div className="field">
-                      <label>
+                      <label htmlFor="provider-icon-new">
                         图标 icon（可选，emoji 或图标 URL；留空用名称首字母）
                       </label>
                       <div className="icon-field">
@@ -949,6 +973,7 @@ export default function AdminPage() {
                           className="icon-preview"
                         />
                         <input
+                          id="provider-icon-new"
                           value={form.icon}
                           onChange={(e) =>
                             setForm({ ...form, icon: e.target.value })
@@ -963,8 +988,8 @@ export default function AdminPage() {
                     <div className="field-row">
                       {form.id && (
                         <div className="field">
-                          <label>类型</label>
-                          <Select
+                          <label htmlFor="providers-966">类型</label>
+                          <Select id="providers-966"
                             ariaLabel="提供商类型"
                             value={form.type}
                             onChange={(v) =>
@@ -981,8 +1006,8 @@ export default function AdminPage() {
                       )}
                       {/* Free-tier grade: 三档单选 ALL FREE / FREE / NO. */}
                       <div className="field">
-                        <label>免费额度</label>
-                        <Select
+                        <label htmlFor="providers-984">免费额度</label>
+                        <Select id="providers-984"
                           ariaLabel="免费额度分级"
                           value={form.free_tier}
                           onChange={(v) =>
@@ -997,8 +1022,8 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="field">
-                      <label>官网地址</label>
-                      <input
+                      <label htmlFor="providers-1000">官网地址</label>
+                      <input id="providers-1000"
                         value={form.base_url}
                         onChange={(e) =>
                           setForm({ ...form, base_url: e.target.value })
@@ -1008,8 +1033,8 @@ export default function AdminPage() {
                       />
                     </div>
                     <div className="field">
-                      <label>描述（可选）</label>
-                      <textarea
+                      <label htmlFor="providers-1011">描述（可选）</label>
+                      <textarea id="providers-1011"
                         className="model-textarea"
                         value={form.description}
                         onChange={(e) =>
@@ -1025,8 +1050,8 @@ export default function AdminPage() {
                         defaultOpen={Boolean(form.aff_code)}
                       >
                         <div className="field">
-                          <label>邀请码 aff（可选）</label>
-                          <input
+                          <label htmlFor="providers-1028">邀请码 aff（可选）</label>
+                          <input id="providers-1028"
                             value={form.aff_code}
                             onChange={(e) =>
                               setForm({ ...form, aff_code: e.target.value })
@@ -1048,8 +1073,8 @@ export default function AdminPage() {
                         }
                       >
                         <div className="field">
-                          <label>自定义模型（可选，每行一个）</label>
-                          <textarea
+                          <label htmlFor="providers-1051">自定义模型（可选，每行一个）</label>
+                          <textarea id="providers-1051"
                             className="model-textarea"
                             value={form.models.join("\n")}
                             onChange={(e) => {
@@ -1083,10 +1108,10 @@ export default function AdminPage() {
                         collapsed by default. Field docs: docs/PROVIDER_FORM.md. */}
                     <FormSection title="高级设置（API Key、模型同步来源）">
                       <div className="field">
-                        <label>
+                        <label htmlFor="providers-1086">
                           API Key{form.type === "newapi" ? "（可选）" : ""}
                         </label>
-                        <input
+                        <input id="providers-1086"
                           type="password"
                           value={form.key}
                           onChange={(e) =>
@@ -1098,8 +1123,8 @@ export default function AdminPage() {
                       {(form.type === "native" || form.type === "proxy") &&
                         CATALOG_SLUG_FIELDS.map((f) => (
                           <div className="field" key={f.id}>
-                            <label>{f.label}</label>
-                            <input
+                            <label htmlFor="providers-1101">{f.label}</label>
+                            <input id="providers-1101"
                               value={form.catalog_slugs[f.id] ?? ""}
                               onChange={(e) =>
                                 setForm({

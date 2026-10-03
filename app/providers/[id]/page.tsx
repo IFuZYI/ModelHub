@@ -350,6 +350,7 @@ export default function ProviderDetail({
               <textarea
                 className="model-textarea"
                 rows={3}
+                aria-label="发表评论"
                 placeholder="写下你的使用体验…"
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}

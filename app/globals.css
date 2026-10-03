@@ -12,11 +12,13 @@
   --surface-2: rgba(255, 255, 255, 0.04);
   --surface-hover: rgba(255, 255, 255, 0.06);
 
-  /* text: never pure white */
-  --text: #f4f4f5;
-  --text-2: #b8b8c0;
-  --text-3: #85858f;
-  --text-4: #5a5a63;
+  /* text: never pure white. Four tiers, each ≥1.3× apart in contrast ratio and
+     ALL clearing WCAG AA 4.5:1 against the lightest surface they appear on
+     (cards composite to #151517, not the page's #09090b). */
+  --text: #f4f4f5; /* 16.6:1 on a card */
+  --text-2: #b8b8c0; /* 9.3:1 */
+  --text-3: #9a9aa4; /* 6.5:1 */
+  --text-4: #83838d; /* 4.9:1 — hints, domains, meta */
 
   /* borders: semi-transparent white */
   --line: rgba(255, 255, 255, 0.07);
@@ -58,8 +60,10 @@
   --surface-hover: rgba(9, 9, 11, 0.05);
   --text: #131316;
   --text-2: #45454d;
-  --text-3: #6b6b74;
-  --text-4: #9a9aa2;
+  --text-3: #5a5a63;
+  /* Same four-tier contract as the dark theme; worst surface is the hover
+     fill (#f3f3f3). */
+  --text-4: #6b6b74;
   --line: rgba(9, 9, 11, 0.08);
   --line-2: rgba(9, 9, 11, 0.13);
   --line-3: rgba(9, 9, 11, 0.2);
@@ -93,9 +97,10 @@ body {
     "liga" 1;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  transition:
-    background 0.4s ease,
-    color 0.3s ease;
+  /* No colour transition on the root: the theme is applied client-side after
+     hydration, so a transition here animates from the DARK palette to the
+     light one on every load — for the first frames the page shows dark-theme
+     text on a light background. Theme swaps must be instant. */
   overflow-x: hidden;
 }
 a {
@@ -461,7 +466,7 @@ main {
 .sel-trigger {
   width: 100%;
   height: 48px;
-  min-width: 150px;
+  min-width: 0;
   padding: 0 14px 0 16px;
   display: inline-flex;
   align-items: center;
@@ -782,6 +787,36 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* A subtitle inside a page header is prose, not a domain label: it must wrap.
+   Reusing .card-domain for both let a long subtitle push the document wide on
+   narrow viewports (its nowrap made a 367px line inside a 284px column). */
+.console-subtitle,
+.detail-subtitle {
+  font: 500 12px/1.5 var(--mono);
+  color: var(--text-4);
+  margin-top: 8px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: 68ch;
+}
+/* Sub-heading inside a form section (导出 / 导入). It is a heading, not a
+   field label: a <label> here would describe no control. */
+.field-heading {
+  margin: 0 0 10px;
+  font: 600 13px/1.4 var(--font);
+  color: var(--text-2);
+}
+/* Compact confirmation dialog (replaces window.confirm). */
+.confirm-modal {
+  max-width: 420px;
+}
+.confirm-body {
+  margin: 0 0 4px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
 .card-bottom {
   position: relative;
   z-index: 2;
@@ -835,11 +870,18 @@ main {
   color: var(--text-3);
 }
 .badge.free-tag {
-  color: #0a7d2e;
+  /* The dark green failed on the tinted pill (2.9:1 over the composited
+     background); a light green clears it on the dark theme. The light theme
+     keeps a dark green for contrast against its pale pill. */
+  color: #4ade80;
   background: rgba(34, 197, 94, 0.16);
   box-shadow: none;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+[data-theme="light"] .badge.free-tag {
+  /* #0a7d2e measured 4.33:1 on the tinted pill; #096e29 clears AA (5.3:1). */
+  color: #096e29;
 }
 /* ALL FREE: stronger emphasis than a plain free tier. */
 .badge.free-tag.full {
@@ -1375,6 +1417,18 @@ main {
 .field-row > .field {
   flex: 1;
   min-width: 0;
+}
+/* Below ~420px two side-by-side fields cannot both honour a control's
+   min-width (two 150px selects + gap overflow a 320px viewport), so stack
+   them instead of pushing the document wide. */
+@media (max-width: 420px) {
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .field-row > .field {
+    width: 100%;
+  }
 }
 
 /* ---------- add-provider flows (choice menu, presets, hints) ---------- */
@@ -2137,7 +2191,11 @@ main {
     flex-shrink: 0;
     gap: 6px;
   }
+  /* Touch targets: 44px is the practical minimum for a thumb. The buttons are
+     36px on desktop (where a mouse is precise); on phones they grow. */
   .header-actions .icon-btn {
+    height: 44px;
+    min-width: 44px;
     padding: 0 9px;
     font-size: 12px;
     white-space: nowrap;
@@ -2152,6 +2210,32 @@ main {
   }
   .header-actions .icon-btn {
     padding: 0 8px;
+  }
+}
+
+/* Touch ergonomics: on pointer-coarse devices every control grows to the
+   44px minimum. Desktop keeps the denser 34-42px sizing, where a mouse is
+   precise and the smaller rhythm looks intentional. */
+@media (pointer: coarse) {
+  .icon-btn,
+  .btn,
+  .vendor-chip,
+  .filter-chip,
+  .console-drawer-toggle,
+  .star-btn,
+  .brand {
+    min-height: 44px;
+  }
+  .icon-btn {
+    min-width: 44px;
+  }
+  /* Checkboxes get a larger hit area without changing the visual box. */
+  input[type="checkbox"] {
+    min-width: 20px;
+    min-height: 20px;
+  }
+  .toggle-row {
+    min-height: 44px;
   }
 }
 

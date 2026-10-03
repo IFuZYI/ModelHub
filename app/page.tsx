@@ -209,6 +209,7 @@ export default function Home() {
             <div className="search-wrap">
               <input
                 className="search-input"
+                aria-label="搜索站点或模型"
                 placeholder="搜索站点，或跨站检索模型与来源…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

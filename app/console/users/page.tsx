@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { fetchAuthStatus, apiErrorMessage } from "../../lib/api";
 
 interface UserRow {
@@ -25,7 +26,10 @@ export default function AdminUsersPage() {
   const [email, setEmail] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "user">("user");
   const [err, setErr] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     const status = await fetchAuthStatus();
@@ -88,17 +92,29 @@ export default function AdminUsersPage() {
     await load();
   }
 
-  async function remove(id: string) {
-    if (!confirm("确定删除该用户？其提供商将一并删除。")) return;
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      alert(apiErrorMessage(json, "删除失败"));
+  function remove(id: string) {
+    setPendingDelete(id);
+  }
+
+  async function confirmDelete() {
+    const id = pendingDelete;
+    if (!id) return;
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setActionErr(apiErrorMessage(json, "删除失败"));
+      } else {
+        setPendingDelete(null);
+      }
+      await load();
+    } finally {
+      setDeleteBusy(false);
     }
-    await load();
   }
 
   return (
@@ -119,7 +135,9 @@ export default function AdminUsersPage() {
           ) : !allowed ? (
             <div className="empty">需要管理员权限。</div>
           ) : (
-            <div className="table-scroll">
+            <>
+              {actionErr && <div className="error-box">{actionErr}</div>}
+              <div className="table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -176,9 +194,19 @@ export default function AdminUsersPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )
         }
       </ConsoleShell>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="删除该用户？"
+        body="该用户及其名下所有站点将被一并删除，此操作无法撤销。"
+        busy={deleteBusy}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
 
       {showCreate && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
@@ -187,20 +215,20 @@ export default function AdminUsersPage() {
             <div className="modal-scroll">
               <form id="create-user-form" onSubmit={createUser}>
                 <div className="field">
-                  <label>用户名</label>
-                  <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+                  <label htmlFor="users-190">用户名</label>
+                  <input id="users-190" value={username} onChange={(e) => setUsername(e.target.value)} required />
                 </div>
                 <div className="field">
-                  <label>邮箱（可选）</label>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <label htmlFor="users-194">邮箱（可选）</label>
+                  <input id="users-194" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label>密码</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <label htmlFor="users-198">密码</label>
+                  <input id="users-198" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
                 <div className="field">
-                  <label>角色</label>
-                  <Select
+                  <label htmlFor="users-202">角色</label>
+                  <Select id="users-202"
                     ariaLabel="角色"
                     value={newRole}
                     onChange={(v) => setNewRole(v as "admin" | "user")}

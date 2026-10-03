@@ -52,9 +52,10 @@ function TagsField({
 
   return (
     <div className="field">
-      <label>标签（可选，逗号分隔，最多 12 个）</label>
+      <label htmlFor="tag-input">标签（可选，逗号分隔，最多 12 个）</label>
       <div className="tag-input-row">
         <input
+          id="tag-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -239,20 +240,25 @@ export default function EditProviderPage({
           ) : (
             <form onSubmit={save} className="settings-form" style={{ marginTop: 4 }}>
               <div className="field">
-                <label>名称</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} required />
+                <label htmlFor="id-242">名称</label>
+                <input id="id-242" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
           <div className="field">
-            <label>图标（emoji 或 URL，留空用首字母）</label>
+            <label htmlFor="provider-icon">图标（emoji 或 URL，留空用首字母）</label>
             <div className="icon-field">
               <ProviderAvatar name={name || "?"} icon={icon} className="icon-preview" />
-              <input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={300} />
+              <input
+                id="provider-icon"
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                maxLength={300}
+              />
             </div>
           </div>
           <div className="field-row">
             <div className="field">
-              <label>类型</label>
-              <Select
+              <label htmlFor="id-254">类型</label>
+              <Select id="id-254"
                 ariaLabel="站点类型"
                 value={type}
                 onChange={(v) => setType(v as ProviderType)}
@@ -265,8 +271,8 @@ export default function EditProviderPage({
               />
             </div>
             <div className="field">
-              <label>免费额度</label>
-              <Select
+              <label htmlFor="id-268">免费额度</label>
+              <Select id="id-268"
                 ariaLabel="免费额度分级"
                 value={freeTier}
                 onChange={(v) => setFreeTier(v as FreeTier)}
@@ -279,12 +285,12 @@ export default function EditProviderPage({
             </div>
           </div>
           <div className="field">
-            <label>官网地址</label>
-            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
+            <label htmlFor="id-282">官网地址</label>
+            <input id="id-282" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
           </div>
           <div className="field">
-            <label>描述（可选）</label>
-            <textarea
+            <label htmlFor="id-286">描述（可选）</label>
+            <textarea id="id-286"
               className="model-textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -294,8 +300,8 @@ export default function EditProviderPage({
           <TagsField tags={tags} onChange={setTags} />
           {type === "newapi" && (
             <div className="field">
-              <label>邀请码 aff（可选）</label>
-              <input
+              <label htmlFor="id-297">邀请码 aff（可选）</label>
+              <input id="id-297"
                 value={affCode}
                 onChange={(e) => setAffCode(e.target.value)}
                 placeholder="留空不拼邀请码；填 RANDOM 从平台邀请码池随机抽取"
@@ -307,8 +313,8 @@ export default function EditProviderPage({
           )}
           {(type === "custom" || type === "newapi") && (
             <div className="field">
-              <label>自定义模型（每行一个）</label>
-              <textarea
+              <label htmlFor="id-310">自定义模型（每行一个）</label>
+              <textarea id="id-310"
                 className="model-textarea"
                 value={models}
                 onChange={(e) => {
@@ -322,8 +328,8 @@ export default function EditProviderPage({
           <details className="field-group">
             <summary>API Key</summary>
             <div className="field">
-              <label>API Key{hasKey ? "（已设置，留空保持不变）" : ""}</label>
-              <input
+              <label htmlFor="id-325">API Key{hasKey ? "（已设置，留空保持不变）" : ""}</label>
+              <input id="id-325"
                 type="password"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}

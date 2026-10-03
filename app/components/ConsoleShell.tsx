@@ -207,9 +207,7 @@ export default function ConsoleShell({
             <div>
               <h1 className="detail-title">{title}</h1>
               {subtitle && (
-                <p className="card-domain" style={{ marginTop: 8 }}>
-                  {subtitle}
-                </p>
+                <p className="console-subtitle">{subtitle}</p>
               )}
             </div>
             {action}

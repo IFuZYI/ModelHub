@@ -38,6 +38,22 @@ export default function RootLayout({
       data-theme="dark"
       className={`${inter.variable} ${jetbrains.variable}`}
     >
+      <head>
+        {/*
+          Apply the persisted theme BEFORE first paint. Without this the
+          server-rendered `data-theme="dark"` is used for the first frames and
+          a light-theme user sees a dark flash (and dark-palette text on the
+          light background) on every navigation.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('modelhub-theme');" +
+              "if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;}" +
+              "}catch(e){}})();",
+          }}
+        />
+      </head>
       <body>
         <div className="page-aurora" />
         <div className="page-glow" />

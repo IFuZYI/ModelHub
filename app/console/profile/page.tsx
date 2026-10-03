@@ -87,8 +87,8 @@ export default function ProfileSettingsPage() {
                 <h2 className="panel-title">公开资料</h2>
                 <div className="profile-grid">
                   <div className="field">
-                    <label>显示名称（留空用用户名 {username}）</label>
-                    <input
+                    <label htmlFor="profile-90">显示名称（留空用用户名 {username}）</label>
+                    <input id="profile-90"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       maxLength={40}
@@ -96,8 +96,8 @@ export default function ProfileSettingsPage() {
                     />
                   </div>
                   <div className="field">
-                    <label>头像 URL（留空用首字母）</label>
-                    <input
+                    <label htmlFor="profile-99">头像 URL（留空用首字母）</label>
+                    <input id="profile-99"
                       value={avatar}
                       onChange={(e) => setAvatar(e.target.value)}
                       maxLength={300}
@@ -105,8 +105,8 @@ export default function ProfileSettingsPage() {
                     />
                   </div>
                   <div className="field">
-                    <label>简介</label>
-                    <textarea
+                    <label htmlFor="profile-108">简介</label>
+                    <textarea id="profile-108"
                       className="model-textarea"
                       rows={3}
                       value={bio}
