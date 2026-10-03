@@ -60,7 +60,11 @@ export function normalizeBaseUrl(raw: string): string {
   try {
     const u = new URL(trimmed);
     const scheme = u.protocol.toLowerCase();
-    const host = u.hostname.toLowerCase();
+    // Strip the FQDN root dot: WHATWG's hostname keeps it, but
+    // "api.x.com." and "api.x.com" are the same relay. Without this, one
+    // physical site splits into two pool/stats scopes and a registered code
+    // is silently missed for the other spelling.
+    const host = u.hostname.toLowerCase().replace(/\.$/, "");
     const isDefaultPort =
       !u.port ||
       (scheme === "https:" && u.port === "443") ||
@@ -511,8 +515,15 @@ export function buildInviteUrl(
 ): string | null {
   const site = baseUrl.trim().replace(/\/+$/, "");
   if (!affCode) return site || null;
-  const sep = site.includes("?") ? "&" : "?";
-  return `${site}${sep}aff=${encodeURIComponent(affCode)}`;
+  const encoded = encodeURIComponent(affCode);
+  // Replace an existing aff param rather than appending a second one: with
+  // `?aff=OLD&aff=NEW` the relay's behaviour is undefined, and if it reads the
+  // first value the drawn code silently never takes effect.
+  if (/[?&]aff=/i.test(site)) {
+    return site.replace(/([?&])aff=[^&]*/i, `$1aff=${encoded}`);
+  }
+  const sep = site.includes("?") ? (site.endsWith("?") ? "" : "&") : "?";
+  return `${site}${sep}aff=${encoded}`;
 }
 
 /** Project a stored provider into its client-safe view (drops key material). */

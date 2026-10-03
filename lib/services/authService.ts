@@ -17,6 +17,15 @@ import type { LoginInput, RegisterInput } from "../domain/validation";
 
 const CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * A well-formed scrypt hash that no password matches, verified against when a
+ * login names an unknown account so the response time does not reveal whether
+ * the user exists. Generated once at module load (the cost is ~10ms).
+ */
+const DUMMY_PASSWORD_HASH = hashPassword(
+  randomUUID() + randomUUID()
+);
+
 /** A completed auth: session token + user. */
 export interface AuthTokenResult {
   status: "ok";
@@ -50,10 +59,13 @@ export class AuthService {
 
   async login(input: LoginInput): Promise<AuthTokenResult> {
     const user = await this.users.getByUsername(input.username);
-    if (!user || user.status !== "active") {
-      throw AppError.unauthorized("用户名或密码错误");
-    }
-    if (!verifyPassword(input.password, user.password_hash)) {
+    // Constant-work login: an early return for an unknown username skips
+    // scrypt entirely, and the response time then reveals whether the account
+    // exists (a username-enumeration oracle). Verify against a dummy hash when
+    // there is no user so both paths pay the same cost.
+    const hash = user?.password_hash ?? DUMMY_PASSWORD_HASH;
+    const passwordOk = verifyPassword(input.password, hash);
+    if (!user || user.status !== "active" || !passwordOk) {
       throw AppError.unauthorized("用户名或密码错误");
     }
     return {
@@ -146,6 +158,12 @@ export class AuthService {
 
   /** Confirm an emailed code, creating the pending account and logging in. */
   async verifyEmail(email: string, code: string): Promise<AuthTokenResult> {
+    // Registration may have been closed after the code was issued; the
+    // operator's switch must win, or a pre-issued code becomes a bypass.
+    const settings = await settingsService.getPublic();
+    if (!settings.registration_enabled) {
+      throw AppError.validation("当前未开放注册");
+    }
     const record = await this.verifications.findValid(email, code);
     if (!record) throw AppError.validation("验证码无效或已过期");
     const payload = JSON.parse(record.payload) as {

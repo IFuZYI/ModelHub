@@ -30,6 +30,13 @@ const rawSchema = z.preprocess(
     MODELHUB_REFRESH_INTERVAL_HOURS: z.coerce.number().positive().optional(),
     MODELHUB_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
     MODELHUB_FETCH_RETRIES: z.coerce.number().int().min(0).max(5).optional(),
+    // Opt-in escape hatch for self-hosted setups that legitimately probe a
+    // newapi instance on loopback/LAN. Off by default: an unguarded fetch
+    // lets any authenticated user reach cloud metadata (169.254.169.254)
+    // and internal services, and read the response back.
+    MODELHUB_ALLOW_PRIVATE_FETCH: z
+      .enum(["true", "false", "1", "0"])
+      .optional(),
     MODELHUB_REFRESH_CONCURRENCY: z.coerce
       .number()
       .int()
@@ -64,6 +71,10 @@ export const config = {
   defaultRefreshIntervalHours: env.MODELHUB_REFRESH_INTERVAL_HOURS ?? 6,
   fetchTimeoutMs: env.MODELHUB_FETCH_TIMEOUT_MS ?? 15_000,
   fetchRetries: env.MODELHUB_FETCH_RETRIES ?? 2,
+  /** Allow outbound fetches to loopback/private hosts (self-hosted LAN use). */
+  allowPrivateFetch:
+    env.MODELHUB_ALLOW_PRIVATE_FETCH === "true" ||
+    env.MODELHUB_ALLOW_PRIVATE_FETCH === "1",
   refreshConcurrency: env.MODELHUB_REFRESH_CONCURRENCY ?? 4,
   logLevel: env.LOG_LEVEL ?? (env.NODE_ENV === "production" ? "info" : "debug"),
   isProduction: env.NODE_ENV === "production",

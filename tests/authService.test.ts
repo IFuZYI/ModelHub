@@ -144,6 +144,7 @@ describe("AuthService registration + verification", () => {
 
   it("rejects a wrong verification code", async () => {
     const db = await freshDb();
+    stubSettings({ registration_enabled: true });
     const verifications = new EmailVerificationRepository(db);
     await verifications.issue(
       "d@x.io",
@@ -155,5 +156,79 @@ describe("AuthService registration + verification", () => {
     await expect(svc.verifyEmail("d@x.io", "999999")).rejects.toThrow(
       /无效或已过期/
     );
+  });
+
+  it("refuses to complete a pending registration once registration is disabled", async () => {
+    const db = await freshDb();
+    const users = new UserRepository(db);
+    const verifications = new EmailVerificationRepository(db);
+
+    // A code was issued while registration was open…
+    stubSettings({
+      registration_enabled: true,
+      email_verification_required: true,
+    });
+    const sent: { to: string; text: string }[] = [];
+    vi.spyOn(mailer, "sendMail").mockImplementation(async (m) => {
+      sent.push({ to: m.to, text: m.text });
+    });
+    const svc = new AuthService(users, verifications);
+    await svc.register({
+      username: "late",
+      password: "password123",
+      email: "late@x.io",
+    });
+    const code = sent[0].text.match(/\d{6}/)![0];
+
+    // …then the operator closes registration before it is confirmed.
+    stubSettings({ registration_enabled: false });
+    await expect(svc.verifyEmail("late@x.io", code)).rejects.toThrow(
+      /未开放注册/
+    );
+    expect(await users.getByUsername("late")).toBeUndefined();
+  });
+});
+
+describe("AuthService login timing", () => {
+  /**
+   * An early return for an unknown username skips scrypt entirely, so the
+   * response time tells an attacker whether the account exists (measured
+   * ~85ms vs ~7ms). The login path must spend comparable work either way.
+   *
+   * The assertion is deliberately loose (same order of magnitude, with a
+   * generous floor) so it is not flaky on a loaded machine — it catches the
+   * 10x+ gap an enumeration oracle needs, not microsecond drift.
+   */
+  it("spends comparable time on an unknown user and a wrong password", async () => {
+    const db = await freshDb();
+    stubSettings({ registration_enabled: true });
+    const users = new UserRepository(db);
+    const svc = new AuthService(users, new EmailVerificationRepository(db));
+    await svc.register({
+      username: "realuser",
+      password: "correct-password-123",
+    });
+
+    const time = async (username: string) => {
+      const started = process.hrtime.bigint();
+      await svc
+        .login({ username, password: "definitely-wrong" })
+        .catch(() => {});
+      return Number(process.hrtime.bigint() - started) / 1e6;
+    };
+
+    // Warm up, then take the best of several runs (least noise).
+    await time("realuser");
+    await time("ghostuser");
+    const runs = 3;
+    let known = Infinity;
+    let unknown = Infinity;
+    for (let i = 0; i < runs; i++) {
+      known = Math.min(known, await time("realuser"));
+      unknown = Math.min(unknown, await time("ghostuser"));
+    }
+
+    // Both paths must do real work; a 10x gap is the enumeration oracle.
+    expect(unknown).toBeGreaterThan(known / 10);
   });
 });

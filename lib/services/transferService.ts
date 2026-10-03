@@ -4,6 +4,7 @@ import type { DatabaseSchema } from "../infra/db";
 import { getDatabase } from "../infra/db";
 import { AppError } from "../domain/errors";
 import { encrypt, decrypt, type EncryptedValue } from "../infra/crypto";
+import { isVerifiablePasswordHash } from "../infra/password";
 import { logger } from "../infra/logger";
 
 /**
@@ -208,6 +209,27 @@ function assertRows(table: TableName, list: Record<string, unknown>[]): void {
         );
       }
     }
+    // Every value must be a type SQLite can bind (string/number/null) and
+    // every number must be finite. Without this, an object/array/boolean
+    // reaches better-sqlite3's binder (raw TypeError -> 500) and Infinity
+    // stores as a `real` that JSON.stringify later emits as null — so the
+    // server's own export would stop re-importing.
+    for (const [field, value] of Object.entries(row)) {
+      if (value === undefined || value === null) continue;
+      const t = typeof value;
+      if (t === "string") continue;
+      if (t === "number") {
+        if (!Number.isFinite(value as number)) {
+          throw AppError.validation(
+            `导入文件损坏：${table} 第 ${i + 1} 行字段 ${field} 不是有效数字`
+          );
+        }
+        continue;
+      }
+      throw AppError.validation(
+        `导入文件损坏：${table} 第 ${i + 1} 行字段 ${field} 类型不支持`
+      );
+    }
   }
 }
 
@@ -318,6 +340,19 @@ export class TransferService {
       if (admins.length === 0) {
         throw AppError.validation(
           "覆盖导入被拒绝：文件中没有可用的管理员账号，会导致无人能登录"
+        );
+      }
+      // An admin with a malformed hash is just as much a lockout as no admin
+      // at all — nobody can log in to fix it. Require at least one admin
+      // whose stored hash is a real scrypt hash this server can verify.
+      const usable = admins.some(
+        (u) =>
+          typeof u.password_hash === "string" &&
+          isVerifiablePasswordHash(u.password_hash)
+      );
+      if (!usable) {
+        throw AppError.validation(
+          "覆盖导入被拒绝：管理员密码哈希无效，导入后将无人能登录"
         );
       }
     }
@@ -623,19 +658,21 @@ export class TransferService {
         const key = String(row.key);
         let value = row.value;
         if (SECRET_SETTING_KEYS.has(key)) {
-          // Plaintext secret from the file: encrypt with the local key.
-          if (row.value_plain === true) {
-            const enc = this.localSecret(value);
-            if (!enc) {
-              skipped++;
-              continue;
-            }
-            value = enc;
-          } else if (typeof value === "string" && value.length === 0) {
+          // A secret column must never hold plaintext at rest. The exporter
+          // marks carried plaintext with value_plain:true, but a hand-crafted
+          // (or third-party) bundle may omit the marker — encrypt anything
+          // that is not already an encrypted envelope.
+          if (typeof value === "string" && value.length === 0) {
             // Secret was stripped on export; keep the local value.
             skipped++;
             continue;
           }
+          const enc = this.localSecret(value);
+          if (!enc) {
+            skipped++;
+            continue;
+          }
+          value = enc;
         }
         await upsert("settings", { key, value: String(value) });
         n++;

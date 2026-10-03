@@ -354,6 +354,121 @@ describe("TransferService", () => {
     expect(Number(n.n)).toBe(2);
   });
 
+  it("rejects hostile value types with a clean VALIDATION error, not a raw TypeError", async () => {
+    const db = await freshDb();
+    await seedSource(db);
+    const svc = new TransferService(db);
+
+    const base = {
+      format: "modelhub-export",
+      version: 1,
+    } as const;
+    const now = "2026-01-01T00:00:00.000Z";
+    const userRow = (extra: Record<string, unknown>) => ({
+      id: "advbool1",
+      username: "advbool1",
+      email: null,
+      password_hash: "h",
+      role: "user",
+      status: "active",
+      token_version: 0,
+      slug: null,
+      created_at: now,
+      updated_at: now,
+      ...extra,
+    });
+
+    // A boolean/object/array where a string or number belongs must not reach
+    // the SQLite binder (raw TypeError -> 500).
+    const hostile: Record<string, unknown>[] = [
+      { token_version: true },
+      { username: { x: 1 } },
+      { username: [1, 2] },
+      { id: [] },
+    ];
+    for (const extra of hostile) {
+      await expect(
+        svc.import(
+          { ...base, data: { users: [userRow(extra)] } },
+          { mode: "merge" }
+        ),
+        JSON.stringify(extra)
+      ).rejects.toMatchObject({ code: "VALIDATION" });
+    }
+  });
+
+  it("rejects non-finite numbers that would silently corrupt a column", async () => {
+    const db = await freshDb();
+    await seedSource(db);
+    const svc = new TransferService(db);
+
+    // Infinity passes a presence check, stores as SQLite `real`, then
+    // JSON.stringify turns it into null on the next export — so the server's
+    // own bundle stops re-importing ("缺少字段"). Refuse it up front.
+    await expect(
+      svc.import(
+        {
+          format: "modelhub-export",
+          version: 1,
+          data: {
+            user_providers: [
+              {
+                id: "p-inf",
+                user_id: "u-admin",
+                name: "Inf",
+                description: null,
+                type: "newapi",
+                base_url: "https://inf.example.com",
+                normalized_base_url: "https://inf.example.com",
+                free_tier: "none",
+                icon: null,
+                adapter: "openai-compatible",
+                aff_code: null,
+                catalog_slugs: "{}",
+                key_enc: null,
+                manual_models: Infinity,
+                register_methods: "[]",
+              },
+            ],
+          },
+        },
+        { mode: "merge" }
+      )
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("encrypts a plaintext smtp_password instead of storing it raw", async () => {
+    const db = await freshDb();
+    await seedSource(db);
+    const svc = new TransferService(db);
+    const PLAINTEXT = "ADV-PLAINTEXT-SMTP-PW";
+
+    // A hand-crafted bundle (no value_plain marker) must not downgrade the
+    // at-rest encryption guarantee for a secret column.
+    await svc.import(
+      {
+        format: "modelhub-export",
+        version: 1,
+        data: { settings: [{ key: "smtp_password", value: PLAINTEXT }] },
+      },
+      { mode: "merge" }
+    );
+
+    const row = await db
+      .selectFrom("settings")
+      .selectAll()
+      .where("key", "=", "smtp_password")
+      .executeTakeFirstOrThrow();
+    expect(row.value).not.toContain(PLAINTEXT);
+    // And it must remain readable through the secret API.
+    const { SettingsRepository } = await import(
+      "@/lib/infra/repositories/settingsRepo"
+    );
+    expect(await new SettingsRepository(db).getSecret("smtp_password")).toBe(
+      PLAINTEXT
+    );
+  });
+
   it("merge mode is idempotent and updates changed rows", async () => {
     const src = await freshDb();
     await seedSource(src);
@@ -543,5 +658,86 @@ describe("TransferService", () => {
       .where("id", "=", "c-orphan")
       .executeTakeFirst();
     expect(orphan).toBeUndefined();
+  });
+
+  it("replace mode refuses a bundle whose only admin has an unusable password hash", async () => {
+    const db = await freshDb();
+    await seedSource(db);
+    const svc = new TransferService(db);
+    const now = "2026-01-01T00:00:00.000Z";
+
+    // The guard must protect against a LOCKOUT, not just a missing admin:
+    // a garbage hash leaves nobody able to log in.
+    await expect(
+      svc.import(
+        {
+          format: "modelhub-export",
+          version: 1,
+          data: {
+            users: [
+              {
+                id: "x1",
+                username: "admin",
+                email: null,
+                password_hash: "garbage-not-a-hash",
+                role: "admin",
+                status: "active",
+                token_version: 0,
+                slug: null,
+                created_at: now,
+                updated_at: now,
+              },
+            ],
+          },
+        },
+        { mode: "replace" }
+      )
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+
+    // The existing admin is untouched.
+    const admin = await db
+      .selectFrom("users")
+      .selectAll()
+      .where("username", "=", "admin")
+      .executeTakeFirstOrThrow();
+    expect(verifyPassword("admin-pass-123", admin.password_hash)).toBe(true);
+  });
+
+  it("replace mode accepts a bundle whose admin hash is a real scrypt hash", async () => {
+    const db = await freshDb();
+    await seedSource(db);
+    const svc = new TransferService(db);
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await svc.import(
+      {
+        format: "modelhub-export",
+        version: 1,
+        data: {
+          users: [
+            {
+              id: "x1",
+              username: "admin",
+              email: null,
+              password_hash: hashPassword("new-admin-pass"),
+              role: "admin",
+              status: "active",
+              token_version: 0,
+              slug: null,
+              created_at: now,
+              updated_at: now,
+            },
+          ],
+        },
+      },
+      { mode: "replace" }
+    );
+
+    const admin = await db
+      .selectFrom("users")
+      .selectAll()
+      .where("username", "=", "admin")
+      .executeTakeFirstOrThrow();
+    expect(verifyPassword("new-admin-pass", admin.password_hash)).toBe(true);
   });
 });
