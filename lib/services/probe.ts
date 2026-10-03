@@ -66,7 +66,13 @@ async function runAttempt(
       try {
         json = await res.json();
       } catch {
-        throw AppError.upstream(`${attempt.name}: response was not valid JSON`);
+        // A 200 whose body is not JSON means this endpoint does not exist in
+        // the expected form — typically an SPA frontend answering every path
+        // with its HTML shell. That is "endpoint unsupported" (like a 404),
+        // not a hard failure: flagging it as such keeps a key-requiring site
+        // classified as needs_key instead of a generic error.
+        // No attempt name here: the caller prefixes it.
+        throw AppError.upstream("response was not valid JSON", { status: 404 });
       }
       return attempt.parse(json);
     } catch (err: unknown) {

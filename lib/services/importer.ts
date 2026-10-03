@@ -35,6 +35,59 @@ const statusSchema = z.object({
     .optional(),
 });
 
+/**
+ * Last-resort avatar when a site publishes no usable logo. A site that hasn't
+ * configured one serves the newapi convention default at {origin}/logo.png,
+ * but some frontends answer EVERY path with their SPA shell (HTTP 200,
+ * text/html), which renders as a broken image. Only accept a response whose
+ * content-type is actually an image, and fall back to the official newapi mark
+ * so the avatar is never a broken glyph.
+ */
+export const NEWAPI_FALLBACK_ICON = "https://www.newapi.ai/logo.svg";
+
+/** True when the URL resolves to a real image (not an SPA HTML catch-all). */
+async function isUsableImage(url: string): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: "GET",
+      headers: { Accept: "image/*" },
+    });
+    if (!res.ok) return false;
+    const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+    return ct.startsWith("image/");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a site's avatar, most-specific first:
+ *   1. the logo from /api/status (absolute or site-relative) — trusted as-is,
+ *      since the site set it explicitly and it may live on a third-party CDN
+ *      this server cannot reach (the browser still can). A genuinely broken
+ *      one degrades to the name initial via ProviderAvatar's onError.
+ *   2. the {origin}/logo.png convention default, accepted only when it really
+ *      serves an image: many newapi frontends answer EVERY path with their SPA
+ *      shell (HTTP 200 + text/html), which would render as a broken avatar.
+ *   3. the official newapi mark, so the avatar is never a broken glyph.
+ */
+async function resolveIcon(
+  rawLogo: string | undefined,
+  baseUrl: string
+): Promise<string | null> {
+  const configured = rawLogo?.trim();
+  if (configured) {
+    try {
+      return new URL(configured, baseUrl).href;
+    } catch {
+      // unparseable logo value: fall through to the convention default
+    }
+  }
+  const convention = new URL("/logo.png", baseUrl).href;
+  if (await isUsableImage(convention)) return convention;
+  return NEWAPI_FALLBACK_ICON;
+}
+
 /** Human-readable labels for each detected sign-up / login method. */
 function extractRegisterMethods(
   data: Record<string, unknown> | undefined
@@ -107,17 +160,7 @@ export async function importNewapiSite(
         reachable = true;
         const sn = p.data.data?.system_name?.trim();
         name = sn && sn.length ? sn : null;
-        // logo may be absolute (https://...) or site-relative (/logo.png).
-        // When a site hasn't configured its own logo, newapi serves the
-        // convention default at {origin}/logo.png — fall back to that so the
-        // avatar still renders instead of the name initial.
-        const rawLogo = p.data.data?.logo?.trim();
-        const logoRef = rawLogo && rawLogo.length ? rawLogo : "/logo.png";
-        try {
-          icon = new URL(logoRef, base_url).href;
-        } catch {
-          icon = null;
-        }
+        icon = await resolveIcon(p.data.data?.logo, base_url);
         register_methods = extractRegisterMethods(
           p.data.data as Record<string, unknown> | undefined
         );
