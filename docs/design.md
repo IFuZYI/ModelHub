@@ -3,7 +3,7 @@
 多租户 AI API 站点目录平台。用户各自维护自己的站点与实时模型清单，并可对外发布
 个人分享页（博客式：用户即博主、站点即文章）。访客可只读浏览、跨站检索、评分评论。
 
-关联决策：ADR 0001 ~ 0013（见 `docs/adr/`）。术语见 `docs/glossary.md`。
+关联决策：ADR 0001 ~ 0015（见 `docs/adr/`）。术语见 `docs/glossary.md`。
 v0.3 多租户落地路线见 `docs/plan-v0.3-multitenant.md`。
 
 ## 1. 目标与非目标
@@ -63,7 +63,7 @@ Next.js 一体化单进程（App Router）：
 
 ## 3. 数据模型
 
-迁移 `migrations/0001..0004` 定义（SQLite / Postgres 双方言）：
+迁移 `migrations/0001..0005` 定义（SQLite / Postgres 双方言）：
 
 | 表 | 用途 |
 |---|---|
@@ -79,6 +79,7 @@ Next.js 一体化单进程（App Router）：
 | `provider_tags` | 站点 ↔ 标签多对多 |
 | `ratings` | 评分：`(user_provider_id, user_id)` 唯一，score 0–5（CHECK 约束） |
 | `comments` | 评论：站点 + 作者 + body |
+| `invite_codes` | 平台邀请码池：来源（user/admin）、码值、按 `normalized_base_url` 隔离（0005） |
 
 - `key_enc`：AES-256-GCM 密文（iv + ct + tag），绝不出现在任何 API 响应中。
 - `normalized_base_url`：`normalizeBaseUrl()` 结果（小写、去默认端口、去尾部 `/`、
@@ -97,7 +98,8 @@ Next.js 一体化单进程（App Router）：
 | 站点 | `POST /api/providers`、`PUT/DELETE /api/providers/:id`、`POST /api/providers/:id/refresh`、`POST /api/providers/import` |
 | 社区 | `PUT /api/providers/:id/ratings`、`POST /api/providers/:id/comments`、`PUT /api/providers/:id/tags`、`DELETE /api/comments/:id` |
 | 个人 | `GET /api/me/providers`、`GET/PUT /api/me/profile`、`POST /api/me/password`、`POST /api/me/slug` |
-| 管理 | `GET/POST /api/admin/users`、`PUT/DELETE /api/admin/users/:id`、`GET/PUT /api/admin/settings`、`GET/POST /api/admin/stats` |
+| 管理 | `GET/POST /api/admin/users`、`PUT/DELETE /api/admin/users/:id`、`GET/PUT /api/admin/settings`、`GET/POST /api/admin/stats`、`GET/POST /api/admin/invite-codes`、`DELETE /api/admin/invite-codes/:id` |
+| 迁移 | `GET /api/admin/transfer/export`、`POST /api/admin/transfer/import`（`?mode=merge\|replace`） |
 
 完整端点表见 README「API」一节。
 
@@ -174,7 +176,7 @@ ModelHub/
 │  ├─ glossary.md          # 术语表
 │  ├─ PROVIDER_FORM.md     # 提供商表单字段
 │  ├─ plan-v0.3-multitenant.md
-│  └─ adr/0001..0013.md    # 架构决策记录
+│  └─ adr/0001..0015.md    # 架构决策记录
 ├─ app/
 │  ├─ page.tsx             # 主页（目录 + 搜索）
 │  ├─ providers/[id]/      # 站点详情
@@ -191,8 +193,8 @@ ModelHub/
 │  ├─ upstream/            # 模型来源适配器
 │  ├─ config/env.ts        # 环境配置（zod fail-fast）
 │  └─ http/handler.ts      # 错误信封 + parseJson
-├─ migrations/0001..0004
-├─ tests/                  # vitest（19 文件 / 115 用例）
+├─ migrations/0001..0005
+├─ tests/                  # vitest（29 文件 / 199 用例）
 ├─ data/                   # SQLite（gitignore）
 └─ .env                    # gitignore
 ```

@@ -95,3 +95,27 @@
 - **tag 写锁**：标签写操作的三层并发防线——①`onConflict(slug).doNothing()` 原子
   upsert + 回读兜底；②挂 `globalThis` 的进程内串行链（防 Turbopack 多 chunk 模块
   实例）；③Postgres 事务级 `pg_advisory_xact_lock`（SQLite no-op），覆盖多进程。[v0.4]
+
+## 邀请码池与迁移（v0.5）
+
+- **平台邀请码池 (invite_codes)**：按 `normalized_base_url` 隔离的邀请码集合，两个来源——
+  用户添加站点时自己填的 `aff_code`（source=`user`）、管理员在系统设置里登记的（source=`admin`）。
+  抽取以「页」为单位播种：主页按小时、详情页按 provider id，同一页多次刷新结果自洽。[v0.5]
+
+- **RANDOM 哨兵**：站点 `aff_code` 填 `RANDOM`（大小写不敏感）表示每次展示时从池中抽取。
+  `RANDOM` 本身是保留值，永不入池、永不作为邀请码下发。[v0.5]
+
+- **留空策略 (aff_blank_policy)**：系统设置，决定站点 `aff_code` 留空时的行为——
+  `none` 不带码 / `random` 等同 `RANDOM`。仅影响**主页**（非个人页）。[v0.5]
+
+- **抽取边界**：只有主页与站点详情页抽取池中邀请码；**个人分享页 `/p/{slug}` 绝不抽取**，
+  只用该用户自己填的码，避免把别人的码挂到他人页面上。[v0.5]
+
+- **数据迁移 (transfer)**：`/api/admin/transfer/export` 导出整个实例为 JSON bundle
+  （`format: "modelhub-export"`、`version: 1`、可选 `includes_secrets`），
+  `/api/admin/transfer/import?mode=merge|replace` 导入。`secrets=1` 时密钥本机解密、
+  目标机用目标主密钥重新加密，因此**换主密钥也能迁移**。[v0.5]
+
+- **SSRF 防护 (SSRF guard)**：所有出站抓取经 `lib/infra/http.ts` 单一汇聚点，默认拒绝
+  回环 / 私网 / 链路本地地址（含云元数据 `169.254.169.254`）；自托管需探测 LAN 中转站时
+  用 `MODELHUB_ALLOW_PRIVATE_FETCH=true` 显式放行。[v0.5]
