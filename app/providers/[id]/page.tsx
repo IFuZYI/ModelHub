@@ -29,7 +29,6 @@ export default function ProviderDetail({
   const [p, setP] = useState<DetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(false);
-  const [role, setRole] = useState<"admin" | "user" | "guest">("guest");
   const [notFound, setNotFound] = useState(false);
   const [query, setQuery] = useState("");
   const [vendor, setVendor] = useState<string>("all");
@@ -57,7 +56,6 @@ export default function ProviderDetail({
     }
     setP(await res.json());
     setAuthed(auth.authenticated);
-    setRole(auth.role);
     setLoading(false);
   }, [id]);
 
@@ -239,7 +237,7 @@ export default function ProviderDetail({
 
   return (
     <>
-      <SiteHeader authenticated={authed} role={role} />
+      <SiteHeader authenticated={authed} />
       <main className="shell">
         <div style={{ paddingTop: 40 }}>
           <Link href="/" className="back-link">

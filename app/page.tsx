@@ -48,7 +48,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
-  const [role, setRole] = useState<"admin" | "user" | "guest">("guest");
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState<CategoryFilter>("all");
   const [sort, setSort] = useState<SortKey>("rating");
@@ -87,7 +86,6 @@ export default function Home() {
   useEffect(() => {
     void fetchAuthStatus().then((auth) => {
       setAuthed(auth.authenticated);
-      setRole(auth.role);
     });
   }, []);
 
@@ -167,11 +165,10 @@ export default function Home() {
     <>
       <SiteHeader
         authenticated={authed}
-        role={role}
         onLogout={async () => {
           await logout();
           setAuthed(false);
-          setRole("guest");
+
         }}
       />
       <main className="shell">

@@ -2116,3 +2116,204 @@ main {
     padding: 0 8px;
   }
 }
+
+/* ============================================================
+   Console shell (v0.5): blog-admin-style sidebar + content column
+   ============================================================ */
+
+.console-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+/* Mobile drawer toggle: hidden on wide screens, shown under 860px. */
+.console-drawer-toggle {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--ring);
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.console-side {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Identity card: avatar + name, like a blog author box. */
+.console-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.console-id-avatar {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  box-shadow: var(--ring);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 650;
+  overflow: hidden;
+}
+.console-id-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.console-id-body {
+  min-width: 0;
+}
+.console-id-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.console-id-meta {
+  margin: 3px 0 0;
+  font: 500 11px/1.4 var(--mono);
+  color: var(--text-4);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.console-role {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  box-shadow: var(--ring);
+  font-size: 10px;
+  color: var(--text-2);
+}
+
+/* Vertical menu. */
+.console-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.console-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-radius: 10px;
+  color: var(--text-3);
+  font-size: 14px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.console-menu-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.console-menu-item.active {
+  background: var(--surface);
+  box-shadow: var(--ring);
+  color: var(--text);
+  font-weight: 600;
+}
+.console-menu-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-4);
+}
+.console-menu-item.active .console-menu-icon {
+  color: var(--accent-ink, var(--text));
+}
+
+.console-menu-back {
+  padding: 10px 13px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+.console-menu-back:hover {
+  color: var(--text-2);
+}
+
+/* Content column. */
+.console-main {
+  min-width: 0;
+}
+.console-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.console-head .detail-title {
+  margin: 0;
+}
+
+/* Overview stat tiles. */
+.console-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.console-tile {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.console-tile-value {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.console-tile-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+@media (max-width: 860px) {
+  .console-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 20px 18px 56px;
+  }
+  .console-drawer-toggle {
+    display: inline-flex;
+  }
+  .console-side {
+    position: static;
+    display: none;
+    margin-bottom: 20px;
+  }
+  .console-side.open {
+    display: flex;
+  }
+}
+

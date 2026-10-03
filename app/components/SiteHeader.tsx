@@ -5,7 +5,6 @@ import { useTheme, toggleTheme } from "../theme";
 
 interface Props {
   authenticated: boolean;
-  role?: "admin" | "user" | "guest";
   onLogout?: () => void;
 }
 
@@ -13,8 +12,9 @@ interface Props {
  * Top navigation. Action buttons keep a one-line row on phones: labels are
  * wrapped in `.btn-label` so very narrow screens can collapse them to icons
  * (see the <=380px media query) without the row wrapping to a second line.
+ * Role-based sections (admin) are handled inside /console, not here.
  */
-export default function SiteHeader({ authenticated, role = "guest", onLogout }: Props) {
+export default function SiteHeader({ authenticated, onLogout }: Props) {
   useTheme();
   return (
     <header className="site-header">
@@ -37,11 +37,6 @@ export default function SiteHeader({ authenticated, role = "guest", onLogout }: 
           </button>
           {authenticated ? (
             <>
-              {role === "admin" && (
-                <Link href="/admin" className="icon-btn" title="管理后台">
-                  ⚙<span className="btn-label"> 管理后台</span>
-                </Link>
-              )}
               <Link href="/console" className="icon-btn" title="控制台">
                 ▤<span className="btn-label"> 控制台</span>
               </Link>

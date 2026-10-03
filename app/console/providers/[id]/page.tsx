@@ -3,13 +3,10 @@
 import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import SiteHeader from "../../../components/SiteHeader";
+import ConsoleShell from "../../../components/ConsoleShell";
 import Select from "../../../components/Select";
 import ProviderAvatar from "../../../components/ProviderAvatar";
-import {
-  fetchAuthStatus,
-  logout as apiLogout,
-} from "../../../lib/api";
+import { fetchAuthStatus } from "../../../lib/api";
 import type { FreeTier, ProviderType } from "@/lib";
 
 interface MyProvider {
@@ -104,7 +101,6 @@ export default function EditProviderPage({
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
-  const [role, setRole] = useState<"admin" | "user" | "guest">("guest");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<ProviderType>("custom");
@@ -123,7 +119,7 @@ export default function EditProviderPage({
   const load = useCallback(async () => {
     const status = await fetchAuthStatus();
     setAuthed(status.authenticated);
-    setRole(status.role);
+
     if (!status.authenticated) {
       setReady(true);
       return;
@@ -203,67 +199,32 @@ export default function EditProviderPage({
     }
   }
 
-  if (!ready)
-    return (
-      <>
-        <SiteHeader authenticated={false} />
-        <main className="shell">
-          <div className="spin">加载中…</div>
-        </main>
-      </>
-    );
-
-  if (!authed)
-    return (
-      <>
-        <SiteHeader authenticated={false} role="guest" />
-        <main className="shell">
-          <div className="empty">
-            请先登录。
-            <div style={{ marginTop: 16 }}>
-              <Link href="/login" className="btn secondary">去登录</Link>
-            </div>
-          </div>
-        </main>
-      </>
-    );
-
-  if (notFound)
-    return (
-      <>
-        <SiteHeader authenticated role={role} />
-        <main className="shell">
-          <div className="empty">
-            站点不存在或不属于你。
-            <div style={{ marginTop: 16 }}>
-              <Link href="/console" className="btn secondary">返回控制台</Link>
-            </div>
-          </div>
-        </main>
-      </>
-    );
-
   return (
     <>
-      <SiteHeader
-        authenticated
-        role={role}
-        onLogout={async () => {
-          await apiLogout();
-          router.replace("/login");
-        }}
-      />
-      <main className="shell">
-        <div style={{ paddingTop: 40 }}>
-          <Link href="/console" className="back-link">← 返回控制台</Link>
-        </div>
-        <h1 className="detail-title" style={{ marginTop: 16 }}>编辑站点</h1>
-
-        <form onSubmit={save} className="settings-form" style={{ marginTop: 20 }}>
-          <div className="field">
-            <label>名称</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
+      <ConsoleShell
+        title="编辑站点"
+        subtitle="修改站点信息、模型与标签。"
+      >
+        {() =>
+          !ready ? (
+            <div className="spin">加载中…</div>
+          ) : !authed ? (
+            <div className="empty">
+              请先登录。
+              <div style={{ marginTop: 16 }}>
+                <Link href="/login" className="btn secondary">
+                  去登录
+                </Link>
+              </div>
+            </div>
+          ) : notFound ? (
+            <div className="empty">站点不存在或不属于你。</div>
+          ) : (
+            <form onSubmit={save} className="settings-form" style={{ marginTop: 4 }}>
+              <div className="field">
+                <label>名称</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
           <div className="field">
             <label>图标（emoji 或 URL，留空用首字母）</label>
             <div className="icon-field">
@@ -348,7 +309,9 @@ export default function EditProviderPage({
             {saving ? "保存中…" : "保存并抓取"}
           </button>
         </form>
-      </main>
+          )
+        }
+      </ConsoleShell>
     </>
   );
 }

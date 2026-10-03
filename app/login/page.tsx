@@ -47,7 +47,7 @@ export default function LoginPage() {
         setPendingEmail(json.email);
         return;
       }
-      router.replace(json.user?.role === "admin" ? "/admin" : "/console");
+      router.replace("/console");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "操作失败");
     } finally {
@@ -68,7 +68,7 @@ export default function LoginPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error?.message || "验证失败");
-      router.replace(json.user?.role === "admin" ? "/admin" : "/console");
+      router.replace("/console");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "验证失败");
     } finally {
