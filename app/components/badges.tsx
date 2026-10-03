@@ -6,12 +6,12 @@ export function TypeBadge({ type }: { type: ProviderType }) {
 }
 
 /**
- * Free-tier tag. "full" → FULL FREE, "free" → FREE, "none" → nothing.
+ * Free-tier tag. "full" → ALL FREE, "free" → FREE, "none" → nothing.
  * Only the two free grades render; a paid provider shows no badge.
  */
 export function FreeBadge({ tier }: { tier: FreeTier }) {
   if (tier === "none") return null;
-  const label = tier === "full" ? "FULL FREE" : "FREE";
+  const label = tier === "full" ? "ALL FREE" : "FREE";
   return <span className={`badge free-tag ${tier}`}>{label}</span>;
 }
 

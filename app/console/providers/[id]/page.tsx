@@ -273,7 +273,7 @@ export default function EditProviderPage({
                 options={[
                   { value: "none", label: "NO（付费）" },
                   { value: "free", label: "FREE（有免费额度）" },
-                  { value: "full", label: "FULL FREE（完全免费）" },
+                  { value: "full", label: "ALL FREE（完全免费）" },
                 ]}
               />
             </div>

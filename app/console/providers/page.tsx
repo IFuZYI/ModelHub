@@ -979,7 +979,7 @@ export default function AdminPage() {
                           />
                         </div>
                       )}
-                      {/* Free-tier grade: 三档单选 FULL FREE / FREE / NO. */}
+                      {/* Free-tier grade: 三档单选 ALL FREE / FREE / NO. */}
                       <div className="field">
                         <label>免费额度</label>
                         <Select
@@ -991,7 +991,7 @@ export default function AdminPage() {
                           options={[
                             { value: "none", label: "NO（付费）" },
                             { value: "free", label: "FREE（有免费额度）" },
-                            { value: "full", label: "FULL FREE（完全免费）" },
+                            { value: "full", label: "ALL FREE（完全免费）" },
                           ]}
                         />
                       </div>
