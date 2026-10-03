@@ -183,6 +183,21 @@ export class UserProviderRepository {
   }
 
   /**
+   * Distinct normalized URLs a user mounts. Cheap (no cache join) and used
+   * before a user delete so the derived stats rows can be recomputed after
+   * the FK cascade removes the provider rows.
+   */
+  async listNormalizedUrlsByUser(userId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom("user_providers")
+      .select("normalized_base_url")
+      .distinct()
+      .where("user_id", "=", userId)
+      .execute();
+    return rows.map((r) => r.normalized_base_url);
+  }
+
+  /**
    * Count-only variant of {@link listByUser}: selects the cache's cheap
    * `count`/status columns instead of the full `models` blob. Used by the
    * console list and public summaries, which never render model names.

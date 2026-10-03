@@ -4,6 +4,7 @@ import { getDatabase } from "../infra/db";
 import { SettingsRepository } from "../infra/repositories/settingsRepo";
 import { TagRepository } from "../infra/repositories/tagRepo";
 import { userProviderService } from "./userProviderService";
+import { statsService } from "./statsService";
 
 /**
  * In-process periodic refresh scheduler. Module-level (globalThis) guard keeps
@@ -12,6 +13,7 @@ import { userProviderService } from "./userProviderService";
 const g = globalThis as unknown as {
   __modelhubScheduler?: NodeJS.Timeout;
   __modelhubTagSweep?: NodeJS.Timeout;
+  __modelhubStatsSweep?: NodeJS.Timeout;
   __modelhubRunning?: boolean;
 };
 
@@ -48,6 +50,23 @@ async function runTagHygiene(reason: string): Promise<void> {
   }
 }
 
+/**
+ * Periodic hygiene: drop provider_stats rows whose providers are all gone.
+ * Derived rows are recomputed on writes, so a URL that lost its last
+ * provider (delete cascade, manual edit) would otherwise stay listed on the
+ *全服统计 page forever.
+ */
+async function runStatsHygiene(reason: string): Promise<void> {
+  try {
+    const removed = await statsService.recomputeAll();
+    if (removed > 0) {
+      logger.info({ reason, removed }, "stats hygiene dropped stale rows");
+    }
+  } catch (e) {
+    logger.error({ err: String(e), reason }, "stats hygiene error");
+  }
+}
+
 export async function startScheduler(): Promise<void> {
   if (g.__modelhubScheduler) return;
 
@@ -68,9 +87,15 @@ export async function startScheduler(): Promise<void> {
   }, intervalMs);
   g.__modelhubTagSweep.unref?.();
 
+  g.__modelhubStatsSweep = setInterval(() => {
+    void runStatsHygiene("interval");
+  }, intervalMs);
+  g.__modelhubStatsSweep.unref?.();
+
   // Kick one refresh shortly after boot without blocking startup.
   setTimeout(() => void runRefresh("boot"), 5000).unref?.();
   setTimeout(() => void runTagHygiene("boot"), 7000).unref?.();
+  setTimeout(() => void runStatsHygiene("boot"), 9000).unref?.();
 
   logger.info({ intervalHours: hours }, "scheduler started");
 }
@@ -84,5 +109,9 @@ export function stopScheduler(): void {
   if (g.__modelhubTagSweep) {
     clearInterval(g.__modelhubTagSweep);
     g.__modelhubTagSweep = undefined;
+  }
+  if (g.__modelhubStatsSweep) {
+    clearInterval(g.__modelhubStatsSweep);
+    g.__modelhubStatsSweep = undefined;
   }
 }

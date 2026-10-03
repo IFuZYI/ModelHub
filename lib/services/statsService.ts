@@ -55,6 +55,29 @@ export class StatsService {
     });
   }
 
+  /**
+   * Sweep every stats row and drop the ones no provider mounts any more.
+   *
+   * The per-URL recompute is driven by writes, so it cannot see a row whose
+   * URL is no longer referenced by anyone (e.g. rows left behind by deletes
+   * that predate the recompute-on-delete fix, or by a manual DB edit). This
+   * heals them.
+   */
+  async recomputeAll(): Promise<number> {
+    const rows = await this.stats.list();
+    let removed = 0;
+    for (const row of rows) {
+      const matching = await this.providers.listMetaByNormalizedUrl(
+        row.normalized_base_url
+      );
+      if (matching.length === 0) {
+        await this.stats.remove(row.normalized_base_url);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
   /** Full-service stats list, annotated with admin-added + effective values. */
   async list(): Promise<ProviderStatView[]> {
     const [stats, admins, allProviders] = await Promise.all([

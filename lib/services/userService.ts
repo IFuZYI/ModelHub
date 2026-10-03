@@ -11,8 +11,10 @@ import {
 } from "../domain/user";
 import { getDatabase, isUniqueViolation } from "../infra/db";
 import { UserRepository, type UserRepository as URepo } from "../infra/repositories/userRepo";
+import { UserProviderRepository } from "../infra/repositories/userProviderRepo";
 import { hashPassword } from "../infra/password";
 import { settingsService } from "./settingsService";
+import { StatsService, statsService } from "./statsService";
 
 export interface CreateUserArgs {
   username: string;
@@ -31,8 +33,16 @@ export interface UpdateUserArgs {
 /** User account use-cases (ADR-0009/0012). */
 export class UserService {
   private readonly repo: URepo;
-  constructor(repo: URepo = new UserRepository(getDatabase())) {
+  private readonly providers: UserProviderRepository;
+  private readonly stats: StatsService;
+  constructor(
+    repo: URepo = new UserRepository(getDatabase()),
+    providers = new UserProviderRepository(getDatabase()),
+    stats: StatsService = statsService
+  ) {
     this.repo = repo;
+    this.providers = providers;
+    this.stats = stats;
   }
 
   /**
@@ -114,7 +124,13 @@ export class UserService {
     if (user.role === "admin" && (await this.adminCount()) <= 1) {
       throw AppError.validation("不能删除唯一的管理员");
     }
+    // The user's providers are removed by FK cascade, which the stats
+    // aggregate cannot see: it is a derived table with no FK of its own, so
+    // its rows would keep advertising sites nobody mounts any more. Capture
+    // the URLs first, then recompute each after the delete.
+    const urls = await this.providers.listNormalizedUrlsByUser(id);
     await this.repo.remove(id);
+    for (const url of urls) await this.stats.recompute(url);
   }
 
   async changePassword(
