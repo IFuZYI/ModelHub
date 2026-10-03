@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
-import { fetchAuthStatus } from "../../lib/api";
+import { fetchAuthStatus, apiErrorMessage } from "../../lib/api";
 
 interface UserRow {
   id: string;
@@ -57,7 +57,7 @@ export default function AdminUsersPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setErr(json?.error?.message || "创建失败");
+      setErr(apiErrorMessage(json, "创建失败"));
       return;
     }
     setShowCreate(false);
@@ -96,7 +96,7 @@ export default function AdminUsersPage() {
     });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
-      alert(json?.error?.message || "删除失败");
+      alert(apiErrorMessage(json, "删除失败"));
     }
     await load();
   }

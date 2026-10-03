@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import ConsoleShell from "../../../components/ConsoleShell";
 import Select from "../../../components/Select";
 import ProviderAvatar from "../../../components/ProviderAvatar";
-import { fetchAuthStatus } from "../../../lib/api";
+import { fetchAuthStatus, apiErrorMessage } from "../../../lib/api";
 import type { FreeTier, ProviderType } from "@/lib";
 
 interface MyProvider {
@@ -190,7 +190,7 @@ export default function EditProviderPage({
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || "保存失败");
+      if (!res.ok) throw new Error(apiErrorMessage(json, "保存失败"));
       router.replace("/console");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "保存失败");

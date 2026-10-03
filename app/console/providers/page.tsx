@@ -5,7 +5,7 @@ import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
 import { TypeBadge, StatusDot } from "../../components/badges";
 import ProviderAvatar from "../../components/ProviderAvatar";
-import { fetchAuthStatus, importNewapiSite } from "../../lib/api";
+import { fetchAuthStatus, importNewapiSite, apiErrorMessage } from "../../lib/api";
 import { typeLabel } from "../../lib/display";
 import { ProviderType, FreeTier } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
@@ -389,7 +389,7 @@ export default function AdminPage() {
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || "保存失败");
+      if (!res.ok) throw new Error(apiErrorMessage(json, "保存失败"));
       setShowModal(false);
       await loadProviders();
     } catch (err) {

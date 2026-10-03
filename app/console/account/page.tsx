@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ConsoleShell from "../../components/ConsoleShell";
+import { apiErrorMessage } from "../../lib/api";
 
 /**
  * Console → 账号安全. Self-service password change; other sessions are
@@ -29,7 +30,7 @@ export default function AccountSecurityPage() {
         body: JSON.stringify({ current_password: curPwd, new_password: newPwd }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error?.message || "修改失败");
+      if (!res.ok) throw new Error(apiErrorMessage(json, "修改失败"));
       setMsg("密码已修改，请重新登录。");
       setCurPwd("");
       setNewPwd("");

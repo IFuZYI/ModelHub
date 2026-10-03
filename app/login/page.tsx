@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import SiteHeader from "../components/SiteHeader";
-import { fetchAuthStatus } from "../lib/api";
+import { fetchAuthStatus, apiErrorMessage } from "../lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function LoginPage() {
         body: JSON.stringify(body),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error?.message || "操作失败");
+      if (!res.ok) throw new Error(apiErrorMessage(json));
       if (json.verification_required) {
         setPendingEmail(json.email);
         return;
@@ -67,7 +67,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email: pendingEmail, code }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error?.message || "验证失败");
+      if (!res.ok) throw new Error(apiErrorMessage(json, "验证失败"));
       router.replace("/console");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "验证失败");

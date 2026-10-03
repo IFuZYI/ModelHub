@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
-import { fetchAuthStatus } from "../../lib/api";
+import { fetchAuthStatus, apiErrorMessage } from "../../lib/api";
 
 interface Settings {
   registration_enabled: boolean;
@@ -80,7 +80,7 @@ export default function AdminSettingsPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setErr(json?.error?.message || "保存失败");
+      setErr(apiErrorMessage(json, "保存失败"));
       return;
     }
     setS(json);

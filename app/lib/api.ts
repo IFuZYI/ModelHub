@@ -39,6 +39,26 @@ export async function logout(): Promise<void> {
   });
 }
 
+/**
+ * Extract a user-facing message from the standard error envelope. Prefers the
+ * server `message`; falls back to the first field-level detail so validation
+ * failures (e.g. a too-short password) always explain themselves.
+ */
+export function apiErrorMessage(json: unknown, fallback = "操作失败"): string {
+  const err = (json as { error?: { message?: string; details?: Record<string, string[] | undefined> } })?.error;
+  if (!err) return fallback;
+  if (err.message && err.message !== "Invalid request body") return err.message;
+  const details = err.details;
+  if (details) {
+    for (const [field, messages] of Object.entries(details)) {
+      if (messages && messages.length > 0) {
+        return `${field}：${messages.join("；")}`;
+      }
+    }
+  }
+  return err.message || fallback;
+}
+
 export interface NewapiImportResult {
   name: string | null;
   base_url: string;
@@ -60,7 +80,7 @@ export async function importNewapiSite(
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(json?.error?.message || "解析站点失败");
+    throw new Error(apiErrorMessage(json, "解析站点失败"));
   }
   return json as NewapiImportResult;
 }
@@ -92,7 +112,7 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error?.message || "操作失败");
+  if (!res.ok) throw new Error(apiErrorMessage(json));
   return json as T;
 }
 
@@ -105,7 +125,7 @@ async function putJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error?.message || "保存失败");
+  if (!res.ok) throw new Error(apiErrorMessage(json, "保存失败"));
   return json as T;
 }
 
@@ -121,7 +141,7 @@ export const unrateProvider = (id: string) =>
     credentials: "same-origin",
   }).then(async (res) => {
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error?.message || "操作失败");
+    if (!res.ok) throw new Error(apiErrorMessage(json));
     return json as { summary: RatingSummary };
   });
 
@@ -134,7 +154,7 @@ export const deleteComment = (commentId: string) =>
     credentials: "same-origin",
   }).then(async (res) => {
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error?.message || "删除失败");
+    if (!res.ok) throw new Error(apiErrorMessage(json, "删除失败"));
     return json as { ok: boolean };
   });
 
@@ -148,7 +168,7 @@ export interface ProfilePayload {
 export const fetchMyProfile = () =>
   fetch("/api/me/profile", { credentials: "same-origin" }).then(async (res) => {
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error?.message || "加载失败");
+    if (!res.ok) throw new Error(apiErrorMessage(json, "加载失败"));
     return json as ProfilePayload;
   });
 

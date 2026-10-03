@@ -90,8 +90,16 @@ export const usernameSchema = z
   .max(32)
   .regex(/^[a-zA-Z0-9_.-]+$/, "用户名只能含字母、数字、_ . -");
 
-export const passwordSchema = z.string().min(8, "密码至少 8 位").max(200);
+export const passwordSchema = z
+  .string()
+  .min(8, "密码至少 8 位")
+  .max(200, "密码最多 200 位");
 
-export const emailSchema = z.string().trim().email().max(254);
+export const emailSchema = z
+  .string()
+  .trim()
+  .min(1, "请填写邮箱")
+  .email("邮箱格式不正确")
+  .max(254, "邮箱过长");
 
 export const roleSchema = z.enum(["admin", "user"]);
