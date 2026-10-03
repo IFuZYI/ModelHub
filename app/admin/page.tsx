@@ -33,6 +33,7 @@ interface ProviderView {
   models: string[];
   last_status: "ok" | "error" | "pending" | "needs_key";
   last_error: string | null;
+  tags: { slug: string; name: string }[];
 }
 
 interface FormState {
@@ -58,6 +59,8 @@ interface FormState {
   adapter: string;
   /** Sign-up / login methods (NewAPI sites). */
   register_methods: string[];
+  /** Custom tags (blog taxonomy). */
+  tags: string[];
 }
 
 /** Catalog slug inputs shown for official providers (adapter id + labels). */
@@ -98,6 +101,7 @@ const EMPTY_FORM: FormState = {
   catalog_slugs: {},
   adapter: "",
   register_methods: [],
+  tags: [],
 };
 
 /**
@@ -106,6 +110,75 @@ const EMPTY_FORM: FormState = {
  *   menu → other    → newapi (quick-import or manual) | custom → form
  */
 type Flow = "menu" | "official" | "other" | "newapi" | "form";
+
+/**
+ * Tag editor: comma/enter-separated input rendered as removable chips.
+ * Tags are free-form; the server resolves names into the global vocabulary.
+ */
+function TagsField({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function commit() {
+    const parts = draft
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const next = [...tags];
+    for (const p of parts) {
+      if (!next.includes(p) && next.length < 12) next.push(p);
+    }
+    onChange(next);
+    setDraft("");
+  }
+
+  return (
+    <div className="field">
+      <label>标签（可选，逗号分隔，最多 12 个）</label>
+      <div className="tag-input-row">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "," || e.key === "，") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Backspace" && !draft && tags.length > 0) {
+              onChange(tags.slice(0, -1));
+            }
+          }}
+          onBlur={commit}
+          placeholder="如：免费、稳定、国产模型…（回车或逗号确认）"
+        />
+        <button type="button" className="icon-btn" onClick={commit}>
+          添加
+        </button>
+      </div>
+      {tags.length > 0 && (
+        <div className="tag-edit-list">
+          {tags.map((t) => (
+            <span key={t} className="tag-edit-item">
+              #{t}
+              <button
+                type="button"
+                onClick={() => onChange(tags.filter((x) => x !== t))}
+                aria-label={`移除标签 ${t}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -185,6 +258,7 @@ export default function AdminPage() {
       catalog_slugs: { ...(p.catalog_slugs ?? {}) },
       adapter: p.adapter ?? "",
       register_methods: p.register_methods ?? [],
+      tags: (p.tags ?? []).map((t) => t.name),
     });
     setFlow("form");
     setShowModal(true);
@@ -216,6 +290,7 @@ export default function AdminPage() {
         catalog_slugs: {},
         adapter: "",
         register_methods: r.register_methods ?? [],
+        tags: [],
       });
       if (!r.reachable) {
         setImportNote(
@@ -249,6 +324,7 @@ export default function AdminPage() {
       catalog_slugs: { ...(preset.catalog_slugs ?? {}) },
       adapter: preset.adapter ?? "",
       register_methods: [],
+      tags: [],
     });
     setPresetNote(preset.note ?? null);
     setFormErr(null);
@@ -316,6 +392,8 @@ export default function AdminPage() {
       if (form.register_methods.length > 0) {
         body.register_methods = form.register_methods;
       }
+      // tags: always send (empty array clears on edit).
+      body.tags = form.tags;
 
       const res = await fetch(url, {
         method: isEdit ? "PUT" : "POST",
@@ -881,6 +959,10 @@ export default function AdminPage() {
                       />
                     </div>
                   )}
+                  <TagsField
+                    tags={form.tags}
+                    onChange={(tags) => setForm({ ...form, tags })}
+                  />
                   {(form.type === "custom" || form.type === "newapi") && (
                     <div className="field">
                       <label>自定义模型（可选，每行一个）</label>

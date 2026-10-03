@@ -6,6 +6,7 @@ import {
   updateUserProviderSchema,
   userProviderService,
   publicService,
+  currentUser,
   assertMasterKey,
 } from "@/lib";
 
@@ -13,10 +14,12 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// Public detail (models only, no key).
+// Public detail (models + social data, no key). The `mine` flag on comments
+// is resolved for the current viewer when logged in.
 export const GET = withErrorHandling(async (_req: Request, ctx: Ctx) => {
   const { id } = await ctx.params;
-  return NextResponse.json(await publicService.detail(id));
+  const viewer = await currentUser();
+  return NextResponse.json(await publicService.detail(id, viewer?.userId));
 });
 
 // Owner-only update.

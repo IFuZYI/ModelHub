@@ -107,6 +107,9 @@ export default function ConsolePage() {
               <Link href="/admin" className="icon-btn">
                 + 管理提供商
               </Link>
+              <Link href="/console/profile" className="icon-btn">
+                个人设置
+              </Link>
               {role === "admin" && (
                 <Link href="/admin/users" className="icon-btn">
                   管理后台

@@ -21,17 +21,22 @@ describe("migrateDatabase", () => {
   it("creates the v0.3 relational foundation on SQLite", async () => {
     const db = memoryDb();
 
-    expect(await migrateDatabase(db)).toEqual([1, 2, 3]);
+    expect(await migrateDatabase(db)).toEqual([1, 2, 3, 4]);
 
     const tables = await db.introspection.getTables();
     expect(tables.map((table) => table.name).sort()).toEqual(
       [
+        "comments",
         "email_verifications",
         "key_pool",
         "model_caches",
         "provider_stats",
+        "provider_tags",
+        "ratings",
         "schema_migrations",
         "settings",
+        "tags",
+        "user_profiles",
         "user_providers",
         "users",
       ].sort()
@@ -42,7 +47,12 @@ describe("migrateDatabase", () => {
       .select("version")
       .orderBy("version")
       .execute();
-    expect(applied).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    expect(applied).toEqual([
+      { version: 1 },
+      { version: 2 },
+      { version: 3 },
+      { version: 4 },
+    ]);
   });
 
   it("is idempotent after the migration ledger is written", async () => {

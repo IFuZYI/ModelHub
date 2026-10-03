@@ -1732,3 +1732,387 @@ main {
     padding: 26px 22px;
   }
 }
+
+/* ============================================================
+   Blog layer (v0.4): stars, comments, tags, author profile
+   ============================================================ */
+
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  vertical-align: middle;
+}
+.stars .star {
+  color: var(--text-4);
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.stars .star.on {
+  color: var(--text);
+}
+.stars-count {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+
+.star-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.star-btn {
+  background: none;
+  border: none;
+  padding: 2px 3px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-4);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    transform 0.12s ease;
+}
+.star-btn:hover:not(:disabled) {
+  color: var(--text-2);
+  transform: scale(1.15);
+}
+.star-btn.on {
+  color: var(--text);
+}
+.star-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.detail-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.tag-chip:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.social-panel {
+  margin-top: 24px;
+}
+.rating-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+.comment-form .btn {
+  align-self: flex-start;
+}
+.comment-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.comment-item {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.comment-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.comment-author {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.comment-time {
+  font-size: 12px;
+  color: var(--text-4);
+  font-family: var(--mono);
+}
+.comment-head .icon-btn {
+  margin-left: auto;
+}
+.comment-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* cross-site search results */
+.search-hits {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.search-hit {
+  cursor: pointer;
+}
+.hit-author {
+  color: var(--text-3);
+}
+.hit-models {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+}
+.hit-vendor {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+}
+
+/* author profile (personal page) */
+.author-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  margin-top: 8px;
+}
+.author-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.author-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.author-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.author-bio {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-2);
+  max-width: 640px;
+  white-space: pre-wrap;
+}
+.author-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  align-items: center;
+}
+
+/* tag input (admin/console forms) */
+.tag-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tag-input-row input {
+  flex: 1;
+}
+.tag-suggestions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.tag-suggestion {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tag-suggestion:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+.tag-edit-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.tag-edit-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.tag-edit-item button {
+  background: none;
+  border: none;
+  color: var(--text-4);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+}
+.tag-edit-item button:hover {
+  color: var(--text);
+}
+
+/* profile form */
+.profile-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ============================================================
+   v0.4.1 — Layout & performance refinements
+   ============================================================ */
+
+/* Long text must never break the layout (search echo, error boxes). */
+.results-bar span,
+.empty,
+.error-box,
+.note-box,
+.card-domain,
+.detail-desc,
+.comment-body {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.results-bar {
+  min-width: 0;
+}
+.results-bar > span {
+  min-width: 0;
+}
+
+/* Decorative aurora must never contribute to scroll width. */
+.page-aurora {
+  overflow: hidden;
+}
+
+/* Long model lists: skip offscreen rendering work (content-visibility),
+   keeps first paint cheap for sites with hundreds of models. */
+.model-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 42px;
+}
+
+/* Comment lists can grow long; same treatment. */
+.comment-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}
+
+/* Search hits with many matched models: same. */
+.search-hit {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
+}
+
+/* Wide data tables scroll horizontally inside their own box on small
+   screens instead of pushing the whole document wide. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Header: on phones the actions row must stay one line; the brand shrinks
+   instead of wrapping the buttons to a second row. */
+@media (max-width: 560px) {
+  .header-inner {
+    flex-wrap: nowrap;
+    min-height: 56px;
+  }
+  .brand {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .brand-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header-actions {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .header-actions .icon-btn {
+    padding: 0 9px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+/* Very narrow screens (<=380px): collapse button labels to icons only so
+   four actions still fit on one row. */
+@media (max-width: 380px) {
+  .header-actions .icon-btn .btn-label {
+    display: none;
+  }
+  .header-actions .icon-btn {
+    padding: 0 8px;
+  }
+}

@@ -13,6 +13,7 @@ import { KeyPoolRepository } from "@/lib/infra/repositories/keyPoolRepo";
 import { SettingsRepository } from "@/lib/infra/repositories/settingsRepo";
 import { UserProviderRepository } from "@/lib/infra/repositories/userProviderRepo";
 import { StatsRepository } from "@/lib/infra/repositories/statsRepo";
+import { TagRepository } from "@/lib/infra/repositories/tagRepo";
 import * as probe from "@/lib/services/probe";
 
 const dbs: AppDatabase[] = [];
@@ -54,7 +55,8 @@ function services(db: AppDatabase, probeResult: probe.ProbeResult) {
     new UserProviderRepository(db),
     new UserRepository(db),
     pool,
-    stats
+    stats,
+    new TagRepository(db)
   );
   return { svc, pool, stats };
 }

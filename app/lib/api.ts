@@ -64,3 +64,99 @@ export async function importNewapiSite(
   }
   return json as NewapiImportResult;
 }
+
+// ---- blog-layer helpers (v0.4) ----
+
+export interface RatingSummary {
+  average: number | null;
+  count: number;
+  distribution: number[];
+}
+
+export interface CommentItem {
+  id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  username: string;
+  mine?: boolean;
+}
+
+/** POST a JSON body and unwrap the standard error envelope. */
+async function postJson<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error?.message || "操作失败");
+  return json as T;
+}
+
+/** PUT a JSON body and unwrap the standard error envelope. */
+async function putJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error?.message || "保存失败");
+  return json as T;
+}
+
+export const rateProvider = (id: string, score: number) =>
+  putJson<{ summary: RatingSummary; my_score: number }>(
+    `/api/providers/${id}/ratings`,
+    { score }
+  );
+
+export const unrateProvider = (id: string) =>
+  fetch(`/api/providers/${id}/ratings`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  }).then(async (res) => {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error?.message || "操作失败");
+    return json as { summary: RatingSummary };
+  });
+
+export const postComment = (id: string, body: string) =>
+  postJson<CommentItem>(`/api/providers/${id}/comments`, { body });
+
+export const deleteComment = (commentId: string) =>
+  fetch(`/api/comments/${commentId}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  }).then(async (res) => {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error?.message || "删除失败");
+    return json as { ok: boolean };
+  });
+
+export interface ProfilePayload {
+  account: SessionUser;
+  display_name: string | null;
+  bio: string | null;
+  avatar: string | null;
+}
+
+export const fetchMyProfile = () =>
+  fetch("/api/me/profile", { credentials: "same-origin" }).then(async (res) => {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error?.message || "加载失败");
+    return json as ProfilePayload;
+  });
+
+export const saveMyProfile = (patch: {
+  display_name?: string | null;
+  bio?: string | null;
+  avatar?: string | null;
+}) => putJson<{ display_name: string | null; bio: string | null; avatar: string | null }>(
+  "/api/me/profile",
+  patch
+);

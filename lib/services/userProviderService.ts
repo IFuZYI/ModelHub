@@ -17,6 +17,7 @@ import {
   type OwnedProviderMeta,
 } from "../infra/repositories/userProviderRepo";
 import { UserRepository } from "../infra/repositories/userRepo";
+import { TagRepository } from "../infra/repositories/tagRepo";
 import { keyPoolService, KeyPoolService } from "./keyPoolService";
 import { statsService, StatsService } from "./statsService";
 import type { Role } from "../domain/user";
@@ -42,14 +43,19 @@ export interface UserProviderView {
   last_error: string | null;
   last_fetched: string | null;
   updated_at: string | null;
+  /** Custom tags (blog taxonomy). */
+  tags: { slug: string; name: string }[];
 }
 
-function toView(p: OwnedProvider): UserProviderView {
-  return metaToView({ ...p, model_count: p.models.length });
+function toView(p: OwnedProvider, tags: { slug: string; name: string }[] = []): UserProviderView {
+  return metaToView({ ...p, model_count: p.models.length }, tags);
 }
 
 /** Build a view from the count-only meta projection (no model-name blob). */
-function metaToView(p: OwnedProviderMeta): UserProviderView {
+function metaToView(
+  p: OwnedProviderMeta,
+  tags: { slug: string; name: string }[] = []
+): UserProviderView {
   return {
     id: p.id,
     name: p.name,
@@ -70,6 +76,7 @@ function metaToView(p: OwnedProviderMeta): UserProviderView {
     last_error: p.last_error,
     last_fetched: p.last_fetched,
     updated_at: p.updated_at,
+    tags,
   };
 }
 
@@ -87,6 +94,8 @@ export interface CreateUserProviderInput {
   models?: string[];
   manual_models?: boolean;
   register_methods?: string[];
+  /** Custom tag names; resolved/created in the global vocabulary. */
+  tags?: string[];
 }
 
 export type UpdateUserProviderInput = Partial<CreateUserProviderInput>;
@@ -105,20 +114,40 @@ export class UserProviderService {
   private readonly users: UserRepository;
   private readonly pool: KeyPoolService;
   private readonly stats: StatsService;
+  private readonly tags: TagRepository;
   constructor(
     repo = new UserProviderRepository(getDatabase()),
     users = new UserRepository(getDatabase()),
     pool: KeyPoolService = keyPoolService,
-    stats: StatsService = statsService
+    stats: StatsService = statsService,
+    tags = new TagRepository(getDatabase())
   ) {
     this.repo = repo;
     this.users = users;
     this.pool = pool;
     this.stats = stats;
+    this.tags = tags;
+  }
+
+  /** Tag views ({slug,name}) for many providers, bulk. */
+  private async tagViews(
+    providerIds: string[]
+  ): Promise<Map<string, { slug: string; name: string }[]>> {
+    const byId = await this.tags.tagsForProviders(providerIds);
+    const out = new Map<string, { slug: string; name: string }[]>();
+    for (const [id, list] of byId) {
+      out.set(
+        id,
+        list.map((t) => ({ slug: t.slug, name: t.name }))
+      );
+    }
+    return out;
   }
 
   async listByUser(userId: string): Promise<UserProviderView[]> {
-    return (await this.repo.listMetaByUser(userId)).map(metaToView);
+    const metas = await this.repo.listMetaByUser(userId);
+    const tagsBy = await this.tagViews(metas.map((m) => m.id));
+    return metas.map((m) => metaToView(m, tagsBy.get(m.id) ?? []));
   }
 
   async getOwned(userId: string, id: string): Promise<OwnedProvider> {
@@ -160,9 +189,13 @@ export class UserProviderService {
     };
     await this.repo.upsert(owned);
     if (input.key) await this.pool.contribute(input.base_url, userId, input.key);
+    if (input.tags && input.tags.length > 0) {
+      await this.tags.replaceProviderTags(owned.id, input.tags);
+    }
     const refreshed = await this.probeAndPersist(owned, role);
     await this.stats.recompute(normalized);
-    return toView(refreshed);
+    const tagsBy = await this.tagViews([refreshed.id]);
+    return toView(refreshed, tagsBy.get(refreshed.id) ?? []);
   }
 
   async update(
@@ -217,22 +250,33 @@ export class UserProviderService {
       }
     }
 
+    // Replace tags when provided (single-transaction resolve+attach+prune).
+    if (input.tags !== undefined) {
+      await this.tags.replaceProviderTags(id, input.tags);
+    }
+
     const refreshed = await this.probeAndPersist(updated, role);
     if (prevNormalized !== newNormalized) await this.stats.recompute(prevNormalized);
     await this.stats.recompute(newNormalized);
-    return toView(refreshed);
+    const tagsBy = await this.tagViews([refreshed.id]);
+    return toView(refreshed, tagsBy.get(refreshed.id) ?? []);
   }
 
   async remove(userId: string, id: string): Promise<void> {
     const existing = await this.getOwned(userId, id);
     await this.repo.remove(id);
     await this.pool.withdraw(existing.base_url, userId);
+    // Lock-guarded: a bare prune statement can deadlock with a concurrent
+    // writer's create+attach transaction (FK KEY SHARE vs DELETE).
+    await this.tags.pruneWithLock();
     await this.stats.recompute(normalizeBaseUrl(existing.base_url));
   }
 
   async refresh(userId: string, role: Role, id: string): Promise<UserProviderView> {
     const existing = await this.getOwned(userId, id);
-    return toView(await this.probeAndPersist(existing, role));
+    const refreshed = await this.probeAndPersist(existing, role);
+    const tagsBy = await this.tagViews([refreshed.id]);
+    return toView(refreshed, tagsBy.get(refreshed.id) ?? []);
   }
 
   /**

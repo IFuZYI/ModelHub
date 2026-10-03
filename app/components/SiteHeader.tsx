@@ -9,6 +9,11 @@ interface Props {
   onLogout?: () => void;
 }
 
+/**
+ * Top navigation. Action buttons keep a one-line row on phones: labels are
+ * wrapped in `.btn-label` so very narrow screens can collapse them to icons
+ * (see the <=380px media query) without the row wrapping to a second line.
+ */
 export default function SiteHeader({ authenticated, role = "guest", onLogout }: Props) {
   useTheme();
   return (
@@ -26,28 +31,29 @@ export default function SiteHeader({ authenticated, role = "guest", onLogout }: 
             className="icon-btn"
             onClick={toggleTheme}
             aria-label="切换主题"
+            title="切换主题"
           >
-            ◐ 主题
+            ◐<span className="btn-label"> 主题</span>
           </button>
           {authenticated ? (
             <>
               {role === "admin" && (
-                <Link href="/admin" className="icon-btn">
-                  ⚙ 管理后台
+                <Link href="/admin" className="icon-btn" title="管理后台">
+                  ⚙<span className="btn-label"> 管理后台</span>
                 </Link>
               )}
-              <Link href="/console" className="icon-btn">
-                ▤ 控制台
+              <Link href="/console" className="icon-btn" title="控制台">
+                ▤<span className="btn-label"> 控制台</span>
               </Link>
               {onLogout && (
-                <button className="icon-btn" onClick={onLogout}>
-                  退出
+                <button className="icon-btn" onClick={onLogout} title="退出登录">
+                  ⏻<span className="btn-label"> 退出</span>
                 </button>
               )}
             </>
           ) : (
-            <Link href="/login" className="icon-btn">
-              登录
+            <Link href="/login" className="icon-btn" title="登录">
+              ⇢<span className="btn-label"> 登录</span>
             </Link>
           )}
         </div>

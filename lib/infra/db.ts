@@ -91,9 +91,62 @@ export interface DatabaseSchema {
     expires_at: string;
     created_at: string;
   };
+  user_profiles: {
+    user_id: string;
+    display_name: string | null;
+    bio: string | null;
+    avatar: string | null;
+    updated_at: string;
+  };
+  tags: {
+    id: string;
+    slug: string;
+    name: string;
+    created_at: string;
+  };
+  provider_tags: {
+    user_provider_id: string;
+    tag_id: string;
+  };
+  ratings: {
+    id: string;
+    user_provider_id: string;
+    user_id: string;
+    score: number;
+    created_at: string;
+    updated_at: string;
+  };
+  comments: {
+    id: string;
+    user_provider_id: string;
+    user_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+  };
 }
 
 export type AppDatabase = Kysely<DatabaseSchema>;
+
+/**
+ * True when a driver error is a unique-constraint violation (SQLite via
+ * better-sqlite3 or Postgres). Used to convert insert races into retries.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string") {
+    if (code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+      return true;
+    }
+    if (code === "23505") return true; // Postgres unique_violation
+  }
+  const message = (err as { message?: unknown }).message;
+  return (
+    typeof message === "string" &&
+    /UNIQUE constraint failed|duplicate key value/i.test(message)
+  );
+}
 
 /** Resolve the default SQLite file without touching the filesystem. */
 export function resolveSqlitePath(dataPath: string | null = config.dataPath): string {

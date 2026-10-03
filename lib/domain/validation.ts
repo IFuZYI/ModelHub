@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { listAdapters } from "../upstream";
 import { FREE_TIERS } from "./provider";
+import { tagNamesSchema } from "./blog";
 import {
   usernameSchema,
   passwordSchema,
@@ -211,6 +212,8 @@ export const createUserProviderSchema = z.object({
   models: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
   manual_models: z.boolean().optional(),
   register_methods: registerMethodsSchema.optional(),
+  /** Custom tags (blog taxonomy); names are resolved/created server-side. */
+  tags: tagNamesSchema.optional(),
 });
 
 export const updateUserProviderSchema = z
@@ -228,6 +231,8 @@ export const updateUserProviderSchema = z
     models: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
     manual_models: z.boolean().optional(),
     register_methods: registerMethodsSchema.optional(),
+    /** Replace the provider's tags when provided. */
+    tags: tagNamesSchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, {
     message: "at least one field is required",

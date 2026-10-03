@@ -7,6 +7,39 @@ export * from "./domain/validation";
 export * from "./domain/presets";
 export * from "./domain/user";
 export {
+  tagSlug,
+  isValidTagName,
+  tagNameSchema,
+  tagNamesSchema,
+  ratingScoreSchema,
+  commentBodySchema,
+  profileUpdateSchema,
+  summarizeRatings,
+  emptyRatingSummary,
+  MAX_TAGS_PER_PROVIDER,
+  MAX_TAG_NAME_LENGTH,
+  MAX_COMMENT_LENGTH,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_BIO_LENGTH,
+  MIN_RATING,
+  MAX_RATING,
+  type Tag,
+  type TagWithCount,
+  type RatingSummary,
+  type RatingView,
+  type CommentView,
+  type UserProfile,
+  type AuthorView,
+  type ProfileUpdateInput,
+} from "./domain/blog";
+export {
+  modelDedupeKey,
+  distinctModelCount,
+  modelVendor,
+  vendorLabel,
+  normalizeVendorKey,
+} from "./domain/vendor";
+export {
   deriveStat,
   type StatContribution,
   type DerivedStat,
@@ -74,6 +107,18 @@ export {
   type PublicPage,
 } from "./services/publicService";
 export { sendMail, isMailerConfigured } from "./services/mailer";
+export {
+  blogService,
+  BlogService,
+} from "./services/blogService";
+export {
+  searchService,
+  SearchService,
+  type SearchHit,
+  type SearchResult,
+  type SearchOptions,
+  type SearchHitAuthor,
+} from "./services/searchService";
 
 // upstream adapters
 export { getAdapter, listAdapters, registerAdapter } from "./upstream";

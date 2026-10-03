@@ -8,7 +8,7 @@ import {
   type Role,
   type UserStatus,
 } from "../domain/user";
-import { getDatabase } from "../infra/db";
+import { getDatabase, isUniqueViolation } from "../infra/db";
 import { UserRepository, type UserRepository as URepo } from "../infra/repositories/userRepo";
 import { hashPassword } from "../infra/password";
 
@@ -112,7 +112,14 @@ export class UserService {
     });
   }
 
-  /** Assign (or rotate) the user's personal-page slug; retries on collision. */
+  /**
+   * Assign (or rotate) the user's personal-page slug.
+   *
+   * The pre-check avoids the common collision, but two concurrent assigns can
+   * still pick the same slug (TOCTOU); the users.slug UNIQUE constraint is the
+   * backstop — catch the conflict and retry with a fresh slug instead of
+   * bubbling a 500.
+   */
   async assignSlug(id: string): Promise<string> {
     const user = await this.repo.getById(id);
     if (!user) throw AppError.notFound("User not found");
@@ -120,8 +127,14 @@ export class UserService {
       const slug = generateSlug();
       if (!isValidSlug(slug)) continue;
       if (await this.repo.getBySlug(slug)) continue;
-      await this.repo.update(id, { slug });
-      return slug;
+      try {
+        await this.repo.update(id, { slug });
+        return slug;
+      } catch (err) {
+        // Unique-constraint loss against a concurrent assign — retry.
+        if (isUniqueViolation(err)) continue;
+        throw err;
+      }
     }
     throw AppError.internal("Failed to allocate a unique slug");
   }

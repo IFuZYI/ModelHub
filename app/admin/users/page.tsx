@@ -156,54 +156,56 @@ export default function AdminUsersPage() {
           </button>
         </div>
 
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>用户名</th>
-              <th>邮箱</th>
-              <th>角色</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>{u.username}</td>
-                <td>{u.email ?? "—"}</td>
-                <td>{u.role === "admin" ? "管理员" : "用户"}</td>
-                <td>{u.status === "active" ? "启用" : "禁用"}</td>
-                <td className="row-actions">
-                  {u.id === selfId ? (
-                    <span className="card-domain">（当前登录）</span>
-                  ) : (
-                    <>
-                      <button
-                        className="icon-btn"
-                        onClick={() => setRole(u.id, u.role === "admin" ? "user" : "admin")}
-                      >
-                        {u.role === "admin" ? "降为用户" : "升为管理员"}
-                      </button>
-                      <button
-                        className="icon-btn"
-                        onClick={() => setStatus(u.id, u.status === "active" ? "disabled" : "active")}
-                      >
-                        {u.status === "active" ? "禁用" : "启用"}
-                      </button>
-                      <button
-                        className="icon-btn"
-                        style={{ color: "var(--err)" }}
-                        onClick={() => remove(u.id)}
-                      >
-                        删除
-                      </button>
-                    </>
-                  )}
-                </td>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>用户名</th>
+                <th>邮箱</th>
+                <th>角色</th>
+                <th>状态</th>
+                <th>操作</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.username}</td>
+                  <td>{u.email ?? "—"}</td>
+                  <td>{u.role === "admin" ? "管理员" : "用户"}</td>
+                  <td>{u.status === "active" ? "启用" : "禁用"}</td>
+                  <td className="row-actions">
+                    {u.id === selfId ? (
+                      <span className="card-domain">（当前登录）</span>
+                    ) : (
+                      <>
+                        <button
+                          className="icon-btn"
+                          onClick={() => setRole(u.id, u.role === "admin" ? "user" : "admin")}
+                        >
+                          {u.role === "admin" ? "降为用户" : "升为管理员"}
+                        </button>
+                        <button
+                          className="icon-btn"
+                          onClick={() => setStatus(u.id, u.status === "active" ? "disabled" : "active")}
+                        >
+                          {u.status === "active" ? "禁用" : "启用"}
+                        </button>
+                        <button
+                          className="icon-btn"
+                          style={{ color: "var(--err)" }}
+                          onClick={() => remove(u.id)}
+                        >
+                          删除
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </main>
 
       {showCreate && (

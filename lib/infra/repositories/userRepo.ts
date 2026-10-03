@@ -38,6 +38,14 @@ export interface UserPatch {
   bump_token_version?: boolean;
 }
 
+/** Client-safe identity subset for bulk view assembly (no credentials). */
+export interface UserIdentity {
+  id: string;
+  username: string;
+  slug: string | null;
+  status: UserStatus;
+}
+
 /** CRUD for user accounts. Storage-agnostic via the Kysely handle. */
 export class UserRepository {
   constructor(private readonly db: Kysely<DatabaseSchema>) {}
@@ -76,6 +84,21 @@ export class UserRepository {
       .where("slug", "=", slug)
       .executeTakeFirst();
     return row ? toUser(row) : undefined;
+  }
+
+  /**
+   * Bulk fetch client-safe identities by id (view assembly without loading
+   * every user row, and without credential material — callers get only
+   * id/username/slug/status, so a future caller can never leak
+   * password_hash by accident).
+   */
+  async getIdentities(ids: string[]): Promise<UserIdentity[]> {
+    if (ids.length === 0) return [];
+    return this.db
+      .selectFrom("users")
+      .select(["id", "username", "slug", "status"])
+      .where("id", "in", [...new Set(ids)])
+      .execute();
   }
 
   async count(): Promise<number> {

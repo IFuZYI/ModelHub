@@ -105,55 +105,57 @@ export default function AdminStatsPage() {
           </div>
         </div>
 
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>提供商</th>
-              <th>地址</th>
-              <th>类型</th>
-              <th>用户数</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stats.map((s) => (
-              <tr key={s.normalized_base_url}>
-                <td>
-                  <span className="cell-provider">
-                    <ProviderAvatar
-                      name={s.effective_name ?? s.base_url}
-                      icon={s.effective_icon}
-                      className="preset-avatar"
-                    />
-                    {s.effective_name ?? "—"}
-                  </span>
-                </td>
-                <td className="cell-mono">{s.base_url}</td>
-                <td>{s.effective_type ?? "—"}</td>
-                <td>{s.user_count}</td>
-                <td>
-                  {s.admin_added ? (
-                    <span className="badge free-tag">已添加</span>
-                  ) : (
-                    <span className="card-domain">未添加</span>
-                  )}
-                </td>
-                <td>
-                  {!s.admin_added && (
-                    <button
-                      className="icon-btn"
-                      disabled={busy === s.normalized_base_url}
-                      onClick={() => quickAdd(s.normalized_base_url)}
-                    >
-                      {busy === s.normalized_base_url ? "添加中…" : "一键添加"}
-                    </button>
-                  )}
-                </td>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>提供商</th>
+                <th>地址</th>
+                <th>类型</th>
+                <th>用户数</th>
+                <th>状态</th>
+                <th>操作</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {stats.map((s) => (
+                <tr key={s.normalized_base_url}>
+                  <td>
+                    <span className="cell-provider">
+                      <ProviderAvatar
+                        name={s.effective_name ?? s.base_url}
+                        icon={s.effective_icon}
+                        className="preset-avatar"
+                      />
+                      {s.effective_name ?? "—"}
+                    </span>
+                  </td>
+                  <td className="cell-mono">{s.base_url}</td>
+                  <td>{s.effective_type ?? "—"}</td>
+                  <td>{s.user_count}</td>
+                  <td>
+                    {s.admin_added ? (
+                      <span className="badge free-tag">已添加</span>
+                    ) : (
+                      <span className="card-domain">未添加</span>
+                    )}
+                  </td>
+                  <td>
+                    {!s.admin_added && (
+                      <button
+                        className="icon-btn"
+                        disabled={busy === s.normalized_base_url}
+                        onClick={() => quickAdd(s.normalized_base_url)}
+                      >
+                        {busy === s.normalized_base_url ? "添加中…" : "一键添加"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </main>
     </>
   );

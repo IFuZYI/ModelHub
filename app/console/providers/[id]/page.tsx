@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 import SiteHeader from "../../../components/SiteHeader";
 import Select from "../../../components/Select";
 import ProviderAvatar from "../../../components/ProviderAvatar";
-import { fetchAuthStatus, logout as apiLogout } from "../../../lib/api";
+import {
+  fetchAuthStatus,
+  logout as apiLogout,
+} from "../../../lib/api";
 import type { FreeTier, ProviderType } from "@/lib";
 
 interface MyProvider {
@@ -21,6 +24,75 @@ interface MyProvider {
   has_key: boolean;
   manual_models: boolean;
   models?: string[];
+  tags?: { slug: string; name: string }[];
+}
+
+/**
+ * Tag editor shared with the admin form (comma/enter-separated chips).
+ */
+function TagsField({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function commit() {
+    const parts = draft
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const next = [...tags];
+    for (const p of parts) {
+      if (!next.includes(p) && next.length < 12) next.push(p);
+    }
+    onChange(next);
+    setDraft("");
+  }
+
+  return (
+    <div className="field">
+      <label>标签（可选，逗号分隔，最多 12 个）</label>
+      <div className="tag-input-row">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "," || e.key === "，") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Backspace" && !draft && tags.length > 0) {
+              onChange(tags.slice(0, -1));
+            }
+          }}
+          onBlur={commit}
+          placeholder="如：免费、稳定、国产模型…（回车或逗号确认）"
+        />
+        <button type="button" className="icon-btn" onClick={commit}>
+          添加
+        </button>
+      </div>
+      {tags.length > 0 && (
+        <div className="tag-edit-list">
+          {tags.map((t) => (
+            <span key={t} className="tag-edit-item">
+              #{t}
+              <button
+                type="button"
+                onClick={() => onChange(tags.filter((x) => x !== t))}
+                aria-label={`移除标签 ${t}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function EditProviderPage({
@@ -43,6 +115,7 @@ export default function EditProviderPage({
   const [key, setKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [models, setModels] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -73,7 +146,16 @@ export default function EditProviderPage({
     setIcon(p.icon ?? "");
     setAffCode(p.aff_code ?? "");
     setHasKey(p.has_key);
-    setModels((p.models ?? []).join("\n"));
+    setTags((p.tags ?? []).map((t) => t.name));
+    // /api/me/providers returns the count-only meta view (no `models`); the
+    // public detail endpoint carries the full model list.
+    const detailRes = await fetch(`/api/providers/${id}`, {
+      credentials: "same-origin",
+    });
+    if (detailRes.ok) {
+      const detail = await detailRes.json();
+      setModels(((detail?.models as string[] | undefined) ?? []).join("\n"));
+    }
     setReady(true);
   }, [id]);
 
@@ -94,6 +176,7 @@ export default function EditProviderPage({
         free_tier: freeTier,
         icon: icon.trim(),
         aff_code: affCode.trim(),
+        tags,
       };
       if (key) body.key = key;
       if (type === "custom" || type === "newapi") {
@@ -151,7 +234,7 @@ export default function EditProviderPage({
         <SiteHeader authenticated role={role} />
         <main className="shell">
           <div className="empty">
-            提供商不存在或不属于你。
+            站点不存在或不属于你。
             <div style={{ marginTop: 16 }}>
               <Link href="/console" className="btn secondary">返回控制台</Link>
             </div>
@@ -174,7 +257,7 @@ export default function EditProviderPage({
         <div style={{ paddingTop: 40 }}>
           <Link href="/console" className="back-link">← 返回控制台</Link>
         </div>
-        <h1 className="detail-title" style={{ marginTop: 16 }}>编辑提供商</h1>
+        <h1 className="detail-title" style={{ marginTop: 16 }}>编辑站点</h1>
 
         <form onSubmit={save} className="settings-form" style={{ marginTop: 20 }}>
           <div className="field">
@@ -192,7 +275,7 @@ export default function EditProviderPage({
             <div className="field">
               <label>类型</label>
               <Select
-                ariaLabel="提供商类型"
+                ariaLabel="站点类型"
                 value={type}
                 onChange={(v) => setType(v as ProviderType)}
                 options={[
@@ -230,6 +313,7 @@ export default function EditProviderPage({
               rows={2}
             />
           </div>
+          <TagsField tags={tags} onChange={setTags} />
           {type === "newapi" && (
             <div className="field">
               <label>邀请码 aff（可选）</label>
