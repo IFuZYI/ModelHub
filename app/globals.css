@@ -786,6 +786,18 @@ main {
   color: var(--text-2);
   background: var(--surface);
 }
+/* "前往" chip on cards: an actionable link, visually distinct from static tags. */
+.card-go {
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.card-go:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .badge {
   padding: 5px 11px;
   border-radius: 999px;

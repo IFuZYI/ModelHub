@@ -16,6 +16,7 @@ interface PublicProvider {
   free_tier: "full" | "free" | "none";
   icon: string | null;
   aff_code: string | null;
+  invite_url: string | null;
   model_count: number;
   tags: { slug: string; name: string }[];
   rating: { average: number | null; count: number; distribution: number[] };
@@ -158,6 +159,22 @@ export default function PersonalPage({
                   ))}
                   {p.comment_count > 0 && (
                     <span className="card-tag">{p.comment_count} 评论</span>
+                  )}
+                  {/* Direct link to the site itself (opens in a new tab);
+                      stopPropagation so it doesn't also trigger the card Link. */}
+                  {(p.invite_url || p.base_url) && (
+                    <a
+                      className="card-tag card-go"
+                      href={p.invite_url || p.base_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title={
+                        p.aff_code ? "前往站点（含邀请码）" : "前往站点"
+                      }
+                    >
+                      前往{p.aff_code ? "（含邀请码）" : ""} ↗
+                    </a>
                   )}
                 </div>
               </Link>
