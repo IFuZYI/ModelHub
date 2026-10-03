@@ -181,7 +181,7 @@ export default function Home() {
           </h1>
           <p>
             汇集官方（原生 / 中转）与其他（NewAPI / 自建）API 站点，浏览各家实时可用的模型清单。
-            支持跨站搜索：输入模型名（如 gpt-6）或来源（如 openai），查哪些站点有。
+            支持跨站搜索：按模型名或来源检索站点。
           </p>
           <div className="stats">
             <span className="stat">
@@ -198,7 +198,7 @@ export default function Home() {
             <div className="search-wrap">
               <input
                 className="search-input"
-                placeholder="搜索站点，或跨站搜模型/来源（如 gpt-6、openai）…"
+                placeholder="搜索站点，或跨站检索模型与来源…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -316,7 +316,7 @@ function SearchResults({
       </div>
       {hits.length === 0 ? (
         <div className="empty">
-          没有站点包含 “{query}”。试试模型名（gpt-6）或来源（openai）。
+          没有站点包含 “{query}”。可尝试模型名或来源。
         </div>
       ) : (
         <div className="search-hits">

@@ -931,7 +931,7 @@ export default function AdminPage() {
                             manual_models: list.length > 0,
                           });
                         }}
-                        placeholder={"gpt-4o\nclaude-sonnet-4\ndeepseek-chat"}
+                        placeholder={"每行一个模型名称"}
                         rows={4}
                       />
                     </div>
