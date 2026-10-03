@@ -113,6 +113,34 @@ describe("UserProviderService", () => {
     ).rejects.toThrow(/URL 重复/);
   });
 
+  it("listByUser returns the count-only view (no model names)", async () => {
+    const db = await freshDb();
+    await makeUser(db, "u-1", "user");
+    const { svc } = services(db, {
+      status: "ok",
+      models: [],
+      error: null,
+      authFailed: false,
+    });
+    await svc.create("u-1", "user", {
+      name: "Manual",
+      type: "newapi",
+      base_url: "https://api.manual.com",
+      models: ["gpt-4o", "o3"],
+      manual_models: true,
+    });
+
+    // The console list (/api/me/providers) must not carry the model-name blob…
+    const views = await svc.listByUser("u-1");
+    expect(views).toHaveLength(1);
+    expect(views[0].model_count).toBe(2);
+    expect("models" in views[0]).toBe(false);
+
+    // …while the repository's full projection still does (detail/edit paths).
+    const [owned] = await new UserProviderRepository(db).listByUser("u-1");
+    expect(owned.models).toEqual(["gpt-4o", "o3"]);
+  });
+
   it("recomputes stats across users and preserves admin override", async () => {
     const db = await freshDb();
     await makeUser(db, "u-1", "user");

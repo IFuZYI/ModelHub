@@ -111,6 +111,15 @@ export default function EditProviderPage({
   const [key, setKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [models, setModels] = useState("");
+  // Whether the real model list loaded (or the user typed one). Guards the
+  // save path from PUTting an empty array and wiping the stored list when the
+  // detail fetch failed.
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  // The provider's stored manual_models flag. Preserved on save: merely opening
+  // the edit page must not freeze live refresh for a fetched model list.
+  const [storedManual, setStoredManual] = useState(false);
+  // True once the user edits the model textarea (then the list is authoritative).
+  const [modelsDirty, setModelsDirty] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -142,6 +151,7 @@ export default function EditProviderPage({
     setIcon(p.icon ?? "");
     setAffCode(p.aff_code ?? "");
     setHasKey(p.has_key);
+    setStoredManual(p.manual_models);
     setTags((p.tags ?? []).map((t) => t.name));
     // /api/me/providers returns the count-only meta view (no `models`); the
     // public detail endpoint carries the full model list.
@@ -151,6 +161,7 @@ export default function EditProviderPage({
     if (detailRes.ok) {
       const detail = await detailRes.json();
       setModels(((detail?.models as string[] | undefined) ?? []).join("\n"));
+      setModelsLoaded(true);
     }
     setReady(true);
   }, [id]);
@@ -180,8 +191,14 @@ export default function EditProviderPage({
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean);
-        body.models = list;
-        body.manual_models = list.length > 0;
+        // Omit `models` unless the real list loaded — otherwise a failed
+        // detail fetch would PUT [] and wipe the stored model list.
+        if (modelsLoaded || list.length > 0) {
+          body.models = list;
+          // Only the user's own edit may change the manual flag; otherwise keep
+          // the stored value so opening+saving doesn't freeze live refresh.
+          body.manual_models = modelsDirty ? list.length > 0 : storedManual;
+        }
       }
       const res = await fetch(`/api/providers/${id}`, {
         method: "PUT",
@@ -287,7 +304,10 @@ export default function EditProviderPage({
               <textarea
                 className="model-textarea"
                 value={models}
-                onChange={(e) => setModels(e.target.value)}
+                onChange={(e) => {
+                  setModels(e.target.value);
+                  setModelsDirty(true);
+                }}
                 rows={4}
               />
             </div>

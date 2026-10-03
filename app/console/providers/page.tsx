@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
 import { TypeBadge, StatusDot } from "../../components/badges";
@@ -28,7 +28,12 @@ interface ProviderView {
   register_methods: string[];
   invite_url: string | null;
   model_count: number;
-  models: string[];
+  /**
+   * Model names are NOT part of this list projection (the endpoint returns the
+   * count-only meta view for performance). Load them from
+   * `/api/providers/{id}` before populating an edit form.
+   */
+  models?: string[];
   last_status: "ok" | "error" | "pending" | "needs_key";
   last_error: string | null;
   tags: { slug: string; name: string }[];
@@ -188,6 +193,13 @@ export default function AdminPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  // True once the user types in the manual-model textarea, so a slow detail
+  // fetch can't overwrite what they typed.
+  const modelsDirtyRef = useRef(false);
+  // Provider id whose model list was successfully loaded into the form. When
+  // the detail fetch failed this stays null and submit must omit `models`
+  // rather than PUT an empty list and wipe the stored one.
+  const modelsLoadedForRef = useRef<string | null>(null);
 
   // newapi quick-import
   const [importUrl, setImportUrl] = useState("");
@@ -229,7 +241,7 @@ export default function AdminPage() {
     setShowModal(true);
   }
 
-  function openEdit(p: ProviderView) {
+  async function openEdit(p: ProviderView) {
     resetModalState();
     setForm({
       id: p.id,
@@ -240,7 +252,7 @@ export default function AdminPage() {
       aff_code: p.aff_code ?? "",
       key: "",
       icon: p.icon ?? "",
-      models: p.models,
+      models: p.models ?? [],
       manual_models: p.manual_models,
       free_tier: p.free_tier ?? "none",
       catalog_slugs: { ...(p.catalog_slugs ?? {}) },
@@ -250,6 +262,34 @@ export default function AdminPage() {
     });
     setFlow("form");
     setShowModal(true);
+    // The list endpoint returns the count-only projection (no model names), so
+    // fetch the public detail for the real list. Without this the manual-model
+    // textarea starts empty and saving would wipe the stored list.
+    if (p.type === "custom" || p.type === "newapi") {
+      modelsDirtyRef.current = false;
+      modelsLoadedForRef.current = null;
+      try {
+        const res = await fetch(`/api/providers/${p.id}`, {
+          credentials: "same-origin",
+        });
+        if (res.ok) {
+          const detail = await res.json();
+          const list = Array.isArray(detail?.models)
+            ? (detail.models as string[])
+            : [];
+          modelsLoadedForRef.current = p.id;
+          // Skip if the user switched records or already edited the textarea.
+          setForm((prev) =>
+            prev.id === p.id && !modelsDirtyRef.current
+              ? { ...prev, models: list }
+              : prev
+          );
+        }
+      } catch {
+        // Leave modelsLoadedForRef null; submit omits `models` so the stored
+        // list is preserved instead of being wiped.
+      }
+    }
   }
 
   function closeModal() {
@@ -370,9 +410,13 @@ export default function AdminPage() {
         if (form.models.length > 0) body.models = form.models;
         if (form.manual_models) body.manual_models = true;
       } else if (form.type === "custom" || form.type === "newapi") {
-        // allow editing the manual model list on these types
-        body.models = form.models;
-        body.manual_models = form.manual_models;
+        // Allow editing the manual model list on these types — but only once
+        // the real list actually loaded (or the user typed one). Otherwise a
+        // failed detail fetch would PUT an empty array and wipe the stored list.
+        if (modelsDirtyRef.current || modelsLoadedForRef.current === form.id) {
+          body.models = form.models;
+          body.manual_models = form.manual_models;
+        }
       }
       // icon: always send (empty string clears on edit).
       body.icon = form.icon.trim();
@@ -925,6 +969,7 @@ export default function AdminPage() {
                             .split("\n")
                             .map((s) => s.trim())
                             .filter(Boolean);
+                          modelsDirtyRef.current = true;
                           setForm({
                             ...form,
                             models: list,
