@@ -11,6 +11,7 @@ import {
 import { getDatabase, isUniqueViolation } from "../infra/db";
 import { UserRepository, type UserRepository as URepo } from "../infra/repositories/userRepo";
 import { hashPassword } from "../infra/password";
+import { settingsService } from "./settingsService";
 
 export interface CreateUserArgs {
   username: string;
@@ -121,6 +122,10 @@ export class UserService {
    * bubbling a 500.
    */
   async assignSlug(id: string): Promise<string> {
+    // ADR-0012: the operator switch also gates NEW slugs, not just display.
+    if (!(await settingsService.getPersonalPagesEnabled())) {
+      throw AppError.validation("个人页功能未开放");
+    }
     const user = await this.repo.getById(id);
     if (!user) throw AppError.notFound("User not found");
     for (let attempt = 0; attempt < 8; attempt++) {

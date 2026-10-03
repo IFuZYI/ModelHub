@@ -124,6 +124,17 @@ export class SettingsService {
     );
   }
 
+  /**
+   * Personal-page switch on its own (hot path: read per public page render).
+   * ADR-0012: when off, existing pages are closed and no new slug is assigned.
+   */
+  async getPersonalPagesEnabled(): Promise<boolean> {
+    return this.repo.get(
+      "personal_pages_enabled",
+      DEFAULTS.personal_pages_enabled
+    );
+  }
+
   async update(patch: SettingsPatch): Promise<PublicSettings> {
     const entries: Array<[string, unknown]> = [];
     if (patch.registration_enabled !== undefined)

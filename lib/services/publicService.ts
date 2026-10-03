@@ -256,6 +256,11 @@ export class PublicService {
 
   /** Personal page by slug. Throws NOT_FOUND when the slug is unknown. */
   async personalPage(slug: string): Promise<PublicPage> {
+    // ADR-0012: the operator switch closes existing pages too, not just the
+    // creation path — the endpoint is reachable by URL.
+    if (!(await settingsService.getPersonalPagesEnabled())) {
+      throw AppError.notFound("Page not found");
+    }
     const user = await this.users.getBySlug(slug);
     if (!user || user.status !== "active") {
       throw AppError.notFound("Page not found");

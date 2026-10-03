@@ -37,6 +37,12 @@ function publicService(db: AppDatabase, blankPolicy: "none" | "random") {
   vi.spyOn(settingsMod.settingsService, "getAffBlankPolicy").mockResolvedValue(
     blankPolicy
   );
+  // These cases exercise invite resolution on personal pages, so the
+  // personal-page switch must be ON (ADR-0012 gates the endpoint itself).
+  vi.spyOn(
+    settingsMod.settingsService,
+    "getPersonalPagesEnabled"
+  ).mockResolvedValue(true);
   return new PublicService(
     new UserProviderRepository(db),
     new UserRepository(db),
