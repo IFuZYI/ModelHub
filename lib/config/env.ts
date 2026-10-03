@@ -7,13 +7,14 @@ import { z } from "zod";
  */
 
 const rawSchema = z.preprocess(
-  // Docker Compose injects "" for unset interpolated vars; treat empty as unset
-  // so an unset DATABASE_URL (or any optional var) is not rejected.
+  // Docker Compose injects "" for unset interpolated vars; treat empty (or
+  // whitespace-only) values as unset so an unset DATABASE_URL is not rejected
+  // and a stray "   " does not reach the pg driver.
   (raw) => {
     if (!raw || typeof raw !== "object") return raw;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      out[k] = v === "" ? undefined : v;
+      out[k] = typeof v === "string" && v.trim() === "" ? undefined : v;
     }
     return out;
   },

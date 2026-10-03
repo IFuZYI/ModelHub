@@ -214,8 +214,9 @@ docker compose up --build -d
 
 - 默认 **SQLite**，数据存于命名卷 `modelhub-data`（容器内 `/data/app.db`）。
 - 默认仅绑定回环 `127.0.0.1:3000`；改端口用 `MODELHUB_PORT=8080`。
-- 容器以非 root 用户（uid 1001）运行，`/data` 卷归其所有。
-- 内置健康检查：`GET /api/health`。
+- 容器以非 root 用户（uid 1001）运行；入口脚本以 root 启动仅用于修正 `/data`
+  属主后立即降权，因此从旧卷（root 属主）升级也能正常启动。
+- 内置健康检查 `GET /api/health`，会探活数据库；库不可用返回 503 并置容器 unhealthy。
 
 **PostgreSQL 后端**（可选，compose profile）：
 
