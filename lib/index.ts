@@ -119,6 +119,16 @@ export {
   type SearchOptions,
   type SearchHitAuthor,
 } from "./services/searchService";
+export {
+  transferService,
+  TransferService,
+  TRANSFER_FORMAT,
+  TRANSFER_VERSION,
+  type ExportBundle,
+  type ExportOptions,
+  type ImportOptions,
+  type ImportSummary,
+} from "./services/transferService";
 
 // upstream adapters
 export { getAdapter, listAdapters, registerAdapter } from "./upstream";
