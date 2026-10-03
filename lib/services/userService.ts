@@ -4,6 +4,7 @@ import {
   toUserView,
   generateSlug,
   isValidSlug,
+  throwUserUniqueAsValidation,
   type UserView,
   type Role,
   type UserStatus,
@@ -34,6 +35,14 @@ export class UserService {
     this.repo = repo;
   }
 
+  /**
+   * Translate a raw UNIQUE violation from the users table into a clean
+   * VALIDATION error (shared with authService via the user domain).
+   */
+  private static rethrowUnique(err: unknown): never {
+    return throwUserUniqueAsValidation(err);
+  }
+
   async list(): Promise<UserView[]> {
     return (await this.repo.list()).map(toUserView);
   }
@@ -48,14 +57,20 @@ export class UserService {
     if (await this.repo.getByUsername(args.username)) {
       throw AppError.validation("用户名已被占用");
     }
-    const user = await this.repo.insert({
-      id: randomUUID(),
-      username: args.username,
-      email: args.email ?? null,
-      password_hash: hashPassword(args.password),
-      role: args.role ?? "user",
-    });
-    return toUserView(user);
+    try {
+      const user = await this.repo.insert({
+        id: randomUUID(),
+        username: args.username,
+        email: args.email ?? null,
+        password_hash: hashPassword(args.password),
+        role: args.role ?? "user",
+      });
+      return toUserView(user);
+    } catch (err) {
+      // Concurrent create, or an email already taken by another account.
+      if (isUniqueViolation(err)) UserService.rethrowUnique(err);
+      throw err;
+    }
   }
 
   async update(id: string, args: UpdateUserArgs): Promise<UserView> {
@@ -70,18 +85,24 @@ export class UserService {
     if (losingAdmin && (await this.adminCount()) <= 1) {
       throw AppError.validation("不能降级或停用唯一的管理员");
     }
-    const updated = await this.repo.update(id, {
-      email: args.email,
-      password_hash:
-        args.password !== undefined ? hashPassword(args.password) : undefined,
-      role: args.role,
-      status: args.status,
-      // Any credential/role/status change invalidates existing sessions.
-      bump_token_version:
-        args.password !== undefined ||
-        args.role !== undefined ||
-        args.status !== undefined,
-    });
+    const updated = await this.repo
+      .update(id, {
+        email: args.email,
+        password_hash:
+          args.password !== undefined ? hashPassword(args.password) : undefined,
+        role: args.role,
+        status: args.status,
+        // Any credential/role/status change invalidates existing sessions.
+        bump_token_version:
+          args.password !== undefined ||
+          args.role !== undefined ||
+          args.status !== undefined,
+      })
+      .catch((err: unknown) => {
+        // e.g. the new email is already used by another account.
+        if (isUniqueViolation(err)) UserService.rethrowUnique(err);
+        throw err;
+      });
     if (!updated) throw AppError.notFound("User not found");
     return toUserView(updated);
   }

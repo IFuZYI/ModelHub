@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AppError } from "./errors";
 
 /** User roles. `guest` is not a stored record — it means "not logged in". */
 export type Role = "admin" | "user";
@@ -42,6 +43,26 @@ export function toUserView(u: User): UserView {
     created_at: u.created_at,
     updated_at: u.updated_at,
   };
+}
+
+/**
+ * Translate a raw UNIQUE violation from the users table into a clean
+ * VALIDATION error. Callers pre-check the common case, but two concurrent
+ * writers can still race past a check; the constraint is the backstop and
+ * must surface as a 400, never a 500.
+ */
+export function throwUserUniqueAsValidation(err: unknown): never {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/users\.email|users_email/.test(message)) {
+    throw AppError.validation("邮箱已被占用");
+  }
+  if (/users\.username|users_username/.test(message)) {
+    throw AppError.validation("用户名已被占用");
+  }
+  if (/users\.slug|users_slug/.test(message)) {
+    throw AppError.validation("个人页路径已被占用");
+  }
+  throw err;
 }
 
 /** Path segments a personal-page slug must never collide with (ADR-0012). */

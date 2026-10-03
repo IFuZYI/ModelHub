@@ -75,3 +75,53 @@ describe("UserService admin safety guards", () => {
     await expect(svc.remove(admin.id)).rejects.toThrow(/唯一的管理员/);
   });
 });
+
+describe("UserService email uniqueness", () => {
+  it("rejects an update that would collide with another user's email", async () => {
+    const db = await freshDb();
+    const svc = new UserService(new UserRepository(db));
+    await svc.create({
+      username: "alice",
+      password: "password123",
+      email: "alice@example.com",
+    });
+    const bob = await svc.create({
+      username: "bob",
+      password: "password123",
+      email: "bob@example.com",
+    });
+    // The users.email UNIQUE constraint must surface as a clean 400, not a 500.
+    await expect(
+      svc.update(bob.id, { email: "alice@example.com" })
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("rejects a create that collides with an existing email", async () => {
+    const db = await freshDb();
+    const svc = new UserService(new UserRepository(db));
+    await svc.create({
+      username: "alice",
+      password: "password123",
+      email: "alice@example.com",
+    });
+    await expect(
+      svc.create({
+        username: "carol",
+        password: "password123",
+        email: "alice@example.com",
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("allows a user to keep their own email on update", async () => {
+    const db = await freshDb();
+    const svc = new UserService(new UserRepository(db));
+    const alice = await svc.create({
+      username: "alice",
+      password: "password123",
+      email: "alice@example.com",
+    });
+    const updated = await svc.update(alice.id, { email: "alice@example.com" });
+    expect(updated.email).toBe("alice@example.com");
+  });
+});

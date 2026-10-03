@@ -87,6 +87,26 @@ describe("AuthService registration + verification", () => {
     ).rejects.toThrow(/域名/);
   });
 
+  it("rejects registration with an email already in use (clean 400, not 500)", async () => {
+    const db = await freshDb();
+    stubSettings({ registration_enabled: true });
+    const users = new UserRepository(db);
+    const svc = new AuthService(users, new EmailVerificationRepository(db));
+    await svc.register({
+      username: "alice",
+      password: "password123",
+      email: "alice@example.com",
+    });
+    // The users.email UNIQUE constraint must not surface as an INTERNAL error.
+    await expect(
+      svc.register({
+        username: "alice2",
+        password: "password123",
+        email: "alice@example.com",
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
   it("issues a code, defers account creation, then verifies", async () => {
     const db = await freshDb();
     stubSettings({

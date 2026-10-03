@@ -1,10 +1,14 @@
 import { randomUUID } from "crypto";
 import { AppError } from "../domain/errors";
-import { getDatabase } from "../infra/db";
+import { getDatabase, isUniqueViolation } from "../infra/db";
 import { UserRepository } from "../infra/repositories/userRepo";
 import { EmailVerificationRepository } from "../infra/repositories/emailVerificationRepo";
 import { hashPassword } from "../infra/password";
-import { toUserView, type UserView } from "../domain/user";
+import {
+  toUserView,
+  throwUserUniqueAsValidation,
+  type UserView,
+} from "../domain/user";
 import { verifyPassword, createToken } from "./auth";
 import { settingsService } from "./settingsService";
 import { sendMail } from "./mailer";
@@ -115,13 +119,20 @@ export class AuthService {
       return { status: "verification_required", email: input.email };
     }
 
-    const user = await this.users.insert({
-      id: randomUUID(),
-      username: input.username,
-      email: input.email ?? null,
-      password_hash: hashPassword(input.password),
-      role: "user",
-    });
+    const user = await this.users
+      .insert({
+        id: randomUUID(),
+        username: input.username,
+        email: input.email ?? null,
+        password_hash: hashPassword(input.password),
+        role: "user",
+      })
+      .catch((err: unknown) => {
+        // e.g. the email is already used by another account (race past the
+        // username check, or a user registering a second account).
+        if (isUniqueViolation(err)) throwUserUniqueAsValidation(err);
+        throw err;
+      });
     return {
       status: "ok",
       token: createToken({
@@ -145,13 +156,19 @@ export class AuthService {
       await this.verifications.consume(record.id);
       throw AppError.validation("用户名已被占用");
     }
-    const user = await this.users.insert({
-      id: randomUUID(),
-      username: payload.username,
-      email,
-      password_hash: payload.password_hash,
-      role: "user",
-    });
+    const user = await this.users
+      .insert({
+        id: randomUUID(),
+        username: payload.username,
+        email,
+        password_hash: payload.password_hash,
+        role: "user",
+      })
+      .catch((err: unknown) => {
+        // The email may have been taken between issue and verify.
+        if (isUniqueViolation(err)) throwUserUniqueAsValidation(err);
+        throw err;
+      });
     await this.verifications.consume(record.id);
     return {
       status: "ok",
