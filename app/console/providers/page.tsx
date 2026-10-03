@@ -6,7 +6,6 @@ import Select from "../../components/Select";
 import { TypeBadge, StatusDot } from "../../components/badges";
 import ProviderAvatar from "../../components/ProviderAvatar";
 import { fetchAuthStatus, importNewapiSite, apiErrorMessage } from "../../lib/api";
-import { typeLabel } from "../../lib/display";
 import { ProviderType, FreeTier } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
 import type { OfficialPreset } from "@/lib/domain/presets";
@@ -183,11 +182,53 @@ function TagsField({
   );
 }
 
+/**
+ * Progressive-disclosure section for the add/edit form. Sections start
+ * collapsed unless the provider already has content for them, so a fresh
+ * NewAPI form shows only the core fields while an existing site shows what it
+ * has. Some content (the model list) only arrives after an async fetch, so the
+ * section keeps following `defaultOpen` until the user toggles it themselves —
+ * after that the user's choice wins.
+ */
+function FormSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const touched = useRef(false);
+
+  useEffect(() => {
+    if (!touched.current) setOpen(defaultOpen);
+  }, [defaultOpen]);
+
+  return (
+    <details
+      className="field-group"
+      open={open}
+      onToggle={(e) => {
+        const next = (e.target as HTMLDetailsElement).open;
+        touched.current = true;
+        setOpen(next);
+      }}
+    >
+      <summary>{title}</summary>
+      {children}
+    </details>
+  );
+}
+
 export default function AdminPage() {
   const [ready, setReady] = useState(false);
 
   // providers
   const [providers, setProviders] = useState<ProviderView[]>([]);
+  /** Active type filter on the site list; "all" keeps the grouped view. */
+  const [typeFilter, setTypeFilter] = useState<ProviderType | "all">("all");
   const [showModal, setShowModal] = useState(false);
   const [flow, setFlow] = useState<Flow>("menu");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -494,65 +535,89 @@ export default function AdminPage() {
     );
   }
 
+  /**
+   * Site list with a type switcher instead of every group stacked in one long
+   * column: chips filter to a single type (官方·原生 / 官方·中转 / NewAPI /
+   * 其他·自建), and "全部" keeps the grouped view.
+   */
   function renderGroupedProviders() {
-    // Sub-group definitions: 官方 → 原生/中转, 其他 → NewAPI/自建.
-    const groups: {
-      category: string;
-      subs: { type: ProviderType; items: ProviderView[] }[];
-    }[] = [
-      {
-        category: "官方",
-        subs: [
-          { type: "native", items: [] },
-          { type: "proxy", items: [] },
-        ],
-      },
-      {
-        category: "其他",
-        subs: [
-          { type: "newapi", items: [] },
-          { type: "custom", items: [] },
-        ],
-      },
+    const subs: { type: ProviderType; label: string }[] = [
+      { type: "native", label: "官方·原生" },
+      { type: "proxy", label: "官方·中转" },
+      { type: "newapi", label: "NewAPI" },
+      { type: "custom", label: "其他 / 自建" },
     ];
-    for (const p of providers) {
-      for (const g of groups) {
-        const sub = g.subs.find((s) => s.type === p.type);
-        if (sub) sub.items.push(p);
-      }
-    }
+    const byType = new Map<ProviderType, ProviderView[]>(
+      subs.map((s) => [s.type, []])
+    );
+    for (const p of providers) byType.get(p.type)?.push(p);
+
+    const shown =
+      typeFilter === "all"
+        ? providers
+        : (byType.get(typeFilter) ?? []);
+
     return (
-      <div className="admin-groups">
-        {groups.map((g) => {
-          const total = g.subs.reduce((n, s) => n + s.items.length, 0);
-          if (total === 0) return null;
-          return (
-            <section key={g.category} className="admin-group">
-              <h2 className="admin-group-title">
-                {g.category}
-                <span className="admin-group-count">{total}</span>
-              </h2>
-              {g.subs.map((s) =>
-                s.items.length === 0 ? null : (
-                  <div key={s.type} className="admin-subgroup">
-                    <div className="admin-subgroup-label">
-                      {typeLabel(s.type)}
-                      <span className="admin-subgroup-count">
-                        {s.items.length}
-                      </span>
-                    </div>
-                    <div className="card-grid">
-                      {s.items.map((p) => (
-                        <ProviderCard key={p.id} p={p} />
-                      ))}
-                    </div>
+      <>
+        <div className="vendor-filter">
+          <button
+            className={`vendor-chip ${typeFilter === "all" ? "active" : ""}`}
+            onClick={() => setTypeFilter("all")}
+          >
+            全部
+            <span className="vendor-chip-count">{providers.length}</span>
+          </button>
+          {subs.map((s) => {
+            const items = byType.get(s.type) ?? [];
+            if (items.length === 0) return null;
+            return (
+              <button
+                key={s.type}
+                className={`vendor-chip ${
+                  typeFilter === s.type ? "active" : ""
+                }`}
+                onClick={() => setTypeFilter(s.type)}
+              >
+                {s.label}
+                <span className="vendor-chip-count">{items.length}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {shown.length === 0 ? (
+          <div className="empty">该分类下还没有站点。</div>
+        ) : typeFilter === "all" ? (
+          // Grouped view: only the labels of types that actually have items.
+          <div className="admin-groups">
+            {subs.map((s) => {
+              const items = byType.get(s.type) ?? [];
+              if (items.length === 0) return null;
+              return (
+                <section key={s.type} className="admin-subgroup">
+                  <div className="admin-subgroup-label">
+                    {s.label}
+                    <span className="admin-subgroup-count">
+                      {items.length}
+                    </span>
                   </div>
-                )
-              )}
-            </section>
-          );
-        })}
-      </div>
+                  <div className="card-grid">
+                    {items.map((p) => (
+                      <ProviderCard key={p.id} p={p} />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="card-grid">
+            {shown.map((p) => (
+              <ProviderCard key={p.id} p={p} />
+            ))}
+          </div>
+        )}
+      </>
     );
   }
 
@@ -593,29 +658,31 @@ export default function AdminPage() {
             {flow === "menu" && (
               <>
                 <h2>添加提供商</h2>
-                <div className="choice-grid">
-                  <button
-                    type="button"
-                    className="choice-card"
-                    onClick={() => setFlow("official")}
-                  >
-                    <span className="choice-icon">✦</span>
-                    <span className="choice-title">官方</span>
-                    <span className="choice-desc">
-                      各厂商原生 API 与中转平台，从内置列表一键选择
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="choice-card"
-                    onClick={() => setFlow("other")}
-                  >
-                    <span className="choice-icon">⇄</span>
-                    <span className="choice-title">其他</span>
-                    <span className="choice-desc">
-                      NewAPI 中转站（支持快捷导入）或自建站点
-                    </span>
-                  </button>
+                <div className="modal-scroll">
+                  <div className="choice-grid">
+                    <button
+                      type="button"
+                      className="choice-card"
+                      onClick={() => setFlow("official")}
+                    >
+                      <span className="choice-icon">✦</span>
+                      <span className="choice-title">官方</span>
+                      <span className="choice-desc">
+                        各厂商原生 API 与中转平台，从内置列表一键选择
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="choice-card"
+                      onClick={() => setFlow("other")}
+                    >
+                      <span className="choice-icon">⇄</span>
+                      <span className="choice-title">其他</span>
+                      <span className="choice-desc">
+                        NewAPI 中转站（支持快捷导入）或自建站点
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 <div className="modal-actions">
                   <button
@@ -633,7 +700,7 @@ export default function AdminPage() {
             {flow === "official" && (
               <>
                 <h2>选择官方提供商</h2>
-                <div className="preset-scroll">
+                <div className="modal-scroll">
                   {/* 原生: grouped by region */}
                   {(["国际", "中国", "企业"] as const).map((region) => {
                     const items = OFFICIAL_PRESETS.filter(
@@ -721,33 +788,35 @@ export default function AdminPage() {
             {flow === "other" && (
               <>
                 <h2>其他提供商</h2>
-                <div className="choice-grid">
-                  <button
-                    type="button"
-                    className="choice-card"
-                    onClick={() => {
-                      setImportUrl("");
-                      setImportErr(null);
-                      setFlow("newapi");
-                    }}
-                  >
-                    <span className="choice-icon">🔗</span>
-                    <span className="choice-title">NewAPI</span>
-                    <span className="choice-desc">
-                      粘贴站点链接快捷导入，或手动填表
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="choice-card"
-                    onClick={() => startBlank("custom")}
-                  >
-                    <span className="choice-icon">⚙</span>
-                    <span className="choice-title">其他 / 自建</span>
-                    <span className="choice-desc">
-                      任意 OpenAI 兼容站点，手动填写
-                    </span>
-                  </button>
+                <div className="modal-scroll">
+                  <div className="choice-grid">
+                    <button
+                      type="button"
+                      className="choice-card"
+                      onClick={() => {
+                        setImportUrl("");
+                        setImportErr(null);
+                        setFlow("newapi");
+                      }}
+                    >
+                      <span className="choice-icon">🔗</span>
+                      <span className="choice-title">NewAPI</span>
+                      <span className="choice-desc">
+                        粘贴站点链接快捷导入，或手动填表
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="choice-card"
+                      onClick={() => startBlank("custom")}
+                    >
+                      <span className="choice-icon">⚙</span>
+                      <span className="choice-title">其他 / 自建</span>
+                      <span className="choice-desc">
+                        任意 OpenAI 兼容站点，手动填写
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 <div className="modal-actions">
                   <button
@@ -765,43 +834,50 @@ export default function AdminPage() {
             {flow === "newapi" && (
               <>
                 <h2>NewAPI 快捷导入</h2>
-                <form onSubmit={runImport}>
-                  <div className="field">
-                    <label>站点链接（首页 / 注册链接 / 含 ?aff= 均可）</label>
-                    <input
-                      value={importUrl}
-                      onChange={(e) => setImportUrl(e.target.value)}
-                      placeholder="https://api.example.top/sign-up?aff=XXXX"
-                      autoFocus
-                      required
-                    />
-                  </div>
-                  <p className="field-hint">
-                    将读取 <code>站点/api/status</code> 的{" "}
-                    <code>system_name</code> 作为名称、<code>logo</code>{" "}
-                    作为图标，并从 <code>?aff=</code> 解析邀请码。
-                  </p>
-                  {importErr && <div className="error-box">{importErr}</div>}
-                  <div className="modal-actions">
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      onClick={() => setFlow("other")}
-                    >
-                      ← 返回
-                    </button>
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      onClick={() => startBlank("newapi")}
-                    >
-                      手动填写
-                    </button>
-                    <button type="submit" className="btn" disabled={importing}>
-                      {importing ? "解析中…" : "解析并继续"}
-                    </button>
-                  </div>
-                </form>
+                <div className="modal-scroll">
+                  <form id="newapi-import-form" onSubmit={runImport}>
+                    <div className="field">
+                      <label>站点链接（首页 / 注册链接 / 含 ?aff= 均可）</label>
+                      <input
+                        value={importUrl}
+                        onChange={(e) => setImportUrl(e.target.value)}
+                        placeholder="https://api.example.top/sign-up?aff=XXXX"
+                        autoFocus
+                        required
+                      />
+                    </div>
+                    <p className="field-hint">
+                      将读取 <code>站点/api/status</code> 的{" "}
+                      <code>system_name</code> 作为名称、<code>logo</code>{" "}
+                      作为图标，并从 <code>?aff=</code> 解析邀请码。
+                    </p>
+                    {importErr && <div className="error-box">{importErr}</div>}
+                  </form>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    onClick={() => setFlow("other")}
+                  >
+                    ← 返回
+                  </button>
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    onClick={() => startBlank("newapi")}
+                  >
+                    手动填写
+                  </button>
+                  <button
+                    type="submit"
+                    form="newapi-import-form"
+                    className="btn"
+                    disabled={importing}
+                  >
+                    {importing ? "解析中…" : "解析并继续"}
+                  </button>
+                </div>
               </>
             )}
 
@@ -819,223 +895,248 @@ export default function AdminPage() {
                           ? "添加 NewAPI 站点"
                           : "添加其他 / 自建"}
                 </h2>
-                <form onSubmit={submitForm}>
-                  {importNote && <div className="note-box">{importNote}</div>}
-                  {presetNote && <div className="note-box">{presetNote}</div>}
-                  {!form.id && form.register_methods.length > 0 && (
-                    <div className="note-box">
-                      支持的注册方式：
-                      <div className="reg-methods">
-                        {form.register_methods.map((m) => (
-                          <span key={m} className="reg-chip">
-                            {m}
-                          </span>
-                        ))}
+                <div className="modal-scroll">
+                  <form id="provider-form" onSubmit={submitForm}>
+                    {importNote && <div className="note-box">{importNote}</div>}
+                    {presetNote && <div className="note-box">{presetNote}</div>}
+                    {!form.id && form.register_methods.length > 0 && (
+                      <div className="note-box">
+                        支持的注册方式：
+                        <div className="reg-methods">
+                          {form.register_methods.map((m) => (
+                            <span key={m} className="reg-chip">
+                              {m}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {!form.id && form.models.length > 0 && (
-                    <div className="note-box">
-                      已内置 {form.models.length} 个模型
-                      {form.manual_models
-                        ? "（该厂商无模型列表接口，将始终使用内置列表）"
-                        : "（作为初始列表，抓取成功后会自动更新）"}
-                      ：
-                      <div className="seed-models">
-                        {form.models.map((m) => (
-                          <span key={m} className="seed-model">
-                            {m}
-                          </span>
-                        ))}
+                    )}
+                    {!form.id && form.models.length > 0 && (
+                      <div className="note-box">
+                        已内置 {form.models.length} 个模型
+                        {form.manual_models
+                          ? "（该厂商无模型列表接口，将始终使用内置列表）"
+                          : "（作为初始列表，抓取成功后会自动更新）"}
+                        ：
+                        <div className="seed-models">
+                          {form.models.map((m) => (
+                            <span key={m} className="seed-model">
+                              {m}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <div className="field">
-                    <label>名称</label>
-                    <input
-                      value={form.name}
-                      onChange={(e) =>
-                        setForm({ ...form, name: e.target.value })
-                      }
-                      placeholder="My OpenAI"
-                      required
-                    />
-                  </div>
-                  <div className="field">
-                    <label>
-                      图标 icon（可选，emoji 或图标 URL；留空用名称首字母）
-                    </label>
-                    <div className="icon-field">
-                      <ProviderAvatar
-                        name={form.name || "?"}
-                        icon={form.icon}
-                        className="icon-preview"
-                      />
+                    )}
+                    <div className="field">
+                      <label>名称</label>
                       <input
-                        value={form.icon}
+                        value={form.name}
                         onChange={(e) =>
-                          setForm({ ...form, icon: e.target.value })
+                          setForm({ ...form, name: e.target.value })
                         }
-                        placeholder="🟢 或 https://.../favicon.ico"
-                        maxLength={300}
+                        placeholder="My OpenAI"
+                        required
                       />
                     </div>
-                  </div>
-                  {/* Type (edit only) + FREE flag share a row. New providers
-                      keep the type chosen in the flow above, so FREE goes solo. */}
-                  <div className="field-row">
-                    {form.id && (
+                    <div className="field">
+                      <label>
+                        图标 icon（可选，emoji 或图标 URL；留空用名称首字母）
+                      </label>
+                      <div className="icon-field">
+                        <ProviderAvatar
+                          name={form.name || "?"}
+                          icon={form.icon}
+                          className="icon-preview"
+                        />
+                        <input
+                          value={form.icon}
+                          onChange={(e) =>
+                            setForm({ ...form, icon: e.target.value })
+                          }
+                          placeholder="🟢 或 https://.../favicon.ico"
+                          maxLength={300}
+                        />
+                      </div>
+                    </div>
+                    {/* Type (edit only) + FREE flag share a row. New providers
+                        keep the type chosen in the flow above, so FREE goes solo. */}
+                    <div className="field-row">
+                      {form.id && (
+                        <div className="field">
+                          <label>类型</label>
+                          <Select
+                            ariaLabel="提供商类型"
+                            value={form.type}
+                            onChange={(v) =>
+                              setForm({ ...form, type: v as ProviderType })
+                            }
+                            options={[
+                              { value: "native", label: "官方·原生" },
+                              { value: "proxy", label: "官方·中转" },
+                              { value: "newapi", label: "NewAPI" },
+                              { value: "custom", label: "其他 / 自建" },
+                            ]}
+                          />
+                        </div>
+                      )}
+                      {/* Free-tier grade: 三档单选 FULL FREE / FREE / NO. */}
                       <div className="field">
-                        <label>类型</label>
+                        <label>免费额度</label>
                         <Select
-                          ariaLabel="提供商类型"
-                          value={form.type}
+                          ariaLabel="免费额度分级"
+                          value={form.free_tier}
                           onChange={(v) =>
-                            setForm({ ...form, type: v as ProviderType })
+                            setForm({ ...form, free_tier: v as FreeTier })
                           }
                           options={[
-                            { value: "native", label: "官方·原生" },
-                            { value: "proxy", label: "官方·中转" },
-                            { value: "newapi", label: "NewAPI" },
-                            { value: "custom", label: "其他 / 自建" },
+                            { value: "none", label: "NO（付费）" },
+                            { value: "free", label: "FREE（有免费额度）" },
+                            { value: "full", label: "FULL FREE（完全免费）" },
                           ]}
                         />
                       </div>
-                    )}
-                    {/* Free-tier grade: 三档单选 FULL FREE / FREE / NO. */}
-                    <div className="field">
-                      <label>免费额度</label>
-                      <Select
-                        ariaLabel="免费额度分级"
-                        value={form.free_tier}
-                        onChange={(v) =>
-                          setForm({ ...form, free_tier: v as FreeTier })
-                        }
-                        options={[
-                          { value: "none", label: "NO（付费）" },
-                          { value: "free", label: "FREE（有免费额度）" },
-                          { value: "full", label: "FULL FREE（完全免费）" },
-                        ]}
-                      />
                     </div>
-                  </div>
-                  <div className="field">
-                    <label>官网地址</label>
-                    <input
-                      value={form.base_url}
-                      onChange={(e) =>
-                        setForm({ ...form, base_url: e.target.value })
-                      }
-                      placeholder="https://openai.com"
-                      required
-                    />
-                  </div>
-                  <div className="field">
-                    <label>描述（可选）</label>
-                    <textarea
-                      className="model-textarea"
-                      value={form.description}
-                      onChange={(e) =>
-                        setForm({ ...form, description: e.target.value })
-                      }
-                      placeholder="一句话介绍这个提供商，展示在详情页。"
-                      rows={2}
-                    />
-                  </div>
-                  {form.type === "newapi" && (
                     <div className="field">
-                      <label>邀请码 aff（可选）</label>
+                      <label>官网地址</label>
                       <input
-                        value={form.aff_code}
+                        value={form.base_url}
                         onChange={(e) =>
-                          setForm({ ...form, aff_code: e.target.value })
+                          setForm({ ...form, base_url: e.target.value })
                         }
-                        placeholder="如 XXX"
+                        placeholder="https://openai.com"
+                        required
                       />
                     </div>
-                  )}
-                  <TagsField
-                    tags={form.tags}
-                    onChange={(tags) => setForm({ ...form, tags })}
-                  />
-                  {(form.type === "custom" || form.type === "newapi") && (
                     <div className="field">
-                      <label>自定义模型（可选，每行一个）</label>
+                      <label>描述（可选）</label>
                       <textarea
                         className="model-textarea"
-                        value={form.models.join("\n")}
-                        onChange={(e) => {
-                          const list = e.target.value
-                            .split("\n")
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          modelsDirtyRef.current = true;
-                          setForm({
-                            ...form,
-                            models: list,
-                            manual_models: list.length > 0,
-                          });
-                        }}
-                        placeholder={"每行一个模型名称"}
-                        rows={4}
-                      />
-                    </div>
-                  )}
-                  {/* Advanced settings (API Key + model sync sources), always
-                      collapsed by default. Field docs: docs/PROVIDER_FORM.md. */}
-                  <details className="field-group">
-                    <summary>高级设置（API Key、模型同步来源）</summary>
-                    <div className="field">
-                      <label>
-                        API Key{form.type === "newapi" ? "（可选）" : ""}
-                      </label>
-                      <input
-                        type="password"
-                        value={form.key}
+                        value={form.description}
                         onChange={(e) =>
-                          setForm({ ...form, key: e.target.value })
+                          setForm({ ...form, description: e.target.value })
                         }
-                        placeholder="sk-...（可留空）"
+                        placeholder="一句话介绍这个提供商，展示在详情页。"
+                        rows={2}
                       />
                     </div>
-                    {(form.type === "native" || form.type === "proxy") &&
-                      CATALOG_SLUG_FIELDS.map((f) => (
-                        <div className="field" key={f.id}>
-                          <label>{f.label}</label>
+                    {form.type === "newapi" && (
+                      <FormSection
+                        title="邀请码 aff"
+                        defaultOpen={Boolean(form.aff_code)}
+                      >
+                        <div className="field">
+                          <label>邀请码 aff（可选）</label>
                           <input
-                            value={form.catalog_slugs[f.id] ?? ""}
+                            value={form.aff_code}
                             onChange={(e) =>
-                              setForm({
-                                ...form,
-                                catalog_slugs: {
-                                  ...form.catalog_slugs,
-                                  [f.id]: e.target.value,
-                                },
-                              })
+                              setForm({ ...form, aff_code: e.target.value })
                             }
-                            placeholder={f.placeholder}
+                            placeholder="如 XXX"
                           />
                         </div>
-                      ))}
-                  </details>
-                  {formErr && <div className="error-box">{formErr}</div>}
-                  <div className="modal-actions">
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      onClick={() =>
-                        form.id
-                          ? closeModal()
-                          : setFlow(backFlowForType(form.type))
-                      }
+                      </FormSection>
+                    )}
+                    {(form.type === "custom" || form.type === "newapi") && (
+                      <FormSection
+                        title="自定义模型（每行一个）"
+                        defaultOpen={
+                          form.manual_models || form.models.length > 0
+                        }
+                      >
+                        <div className="field">
+                          <label>自定义模型（可选，每行一个）</label>
+                          <textarea
+                            className="model-textarea"
+                            value={form.models.join("\n")}
+                            onChange={(e) => {
+                              const list = e.target.value
+                                .split("\n")
+                                .map((s) => s.trim())
+                                .filter(Boolean);
+                              modelsDirtyRef.current = true;
+                              setForm({
+                                ...form,
+                                models: list,
+                                manual_models: list.length > 0,
+                              });
+                            }}
+                            placeholder={"每行一个模型名称"}
+                            rows={4}
+                          />
+                        </div>
+                      </FormSection>
+                    )}
+                    <FormSection
+                      title="标签"
+                      defaultOpen={form.tags.length > 0}
                     >
-                      {form.id ? "取消" : "← 返回"}
-                    </button>
-                    <button type="submit" className="btn" disabled={submitting}>
-                      {submitting ? "保存中…" : "保存并抓取"}
-                    </button>
-                  </div>
-                </form>
+                      <TagsField
+                        tags={form.tags}
+                        onChange={(tags) => setForm({ ...form, tags })}
+                      />
+                    </FormSection>
+                    {/* Advanced settings (API Key + model sync sources), always
+                        collapsed by default. Field docs: docs/PROVIDER_FORM.md. */}
+                    <FormSection title="高级设置（API Key、模型同步来源）">
+                      <div className="field">
+                        <label>
+                          API Key{form.type === "newapi" ? "（可选）" : ""}
+                        </label>
+                        <input
+                          type="password"
+                          value={form.key}
+                          onChange={(e) =>
+                            setForm({ ...form, key: e.target.value })
+                          }
+                          placeholder="sk-...（可留空）"
+                        />
+                      </div>
+                      {(form.type === "native" || form.type === "proxy") &&
+                        CATALOG_SLUG_FIELDS.map((f) => (
+                          <div className="field" key={f.id}>
+                            <label>{f.label}</label>
+                            <input
+                              value={form.catalog_slugs[f.id] ?? ""}
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  catalog_slugs: {
+                                    ...form.catalog_slugs,
+                                    [f.id]: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder={f.placeholder}
+                            />
+                          </div>
+                        ))}
+                    </FormSection>
+                    {formErr && <div className="error-box">{formErr}</div>}
+                  </form>
+                </div>
+                {/* Footer lives outside the scroll area and submits the form
+                    via its id, so 保存并抓取 stays reachable on any height. */}
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    onClick={() =>
+                      form.id
+                        ? closeModal()
+                        : setFlow(backFlowForType(form.type))
+                    }
+                  >
+                    {form.id ? "取消" : "← 返回"}
+                  </button>
+                  <button
+                    type="submit"
+                    form="provider-form"
+                    className="btn"
+                    disabled={submitting}
+                  >
+                    {submitting ? "保存中…" : "保存并抓取"}
+                  </button>
+                </div>
               </>
             )}
           </div>

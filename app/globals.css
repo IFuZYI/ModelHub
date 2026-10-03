@@ -502,6 +502,18 @@ main {
 .sel.open .sel-caret {
   transform: rotate(-135deg) translate(-1px, -1px);
 }
+/* Flipped upward when there is no room below (see Select.tsx). */
+.sel.drop-up .sel-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+  animation-name: sel-pop-up;
+}
+@keyframes sel-pop-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
 .sel-menu {
   position: absolute;
   z-index: 50;
@@ -1210,11 +1222,37 @@ main {
 .modal {
   width: 440px;
   max-width: 100%;
-  padding: 28px;
+  /* Cap to the viewport and scroll the BODY (not the shell) so the heading
+     stays pinned at the top and .modal-actions at the bottom — otherwise a
+     tall form (e.g. the NewAPI one) is clipped off-screen with no way to
+     reach 保存. Height-driven, so it also covers wide-but-short windows that
+     the max-width media queries below never match. */
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   border-radius: var(--radius-lg);
   background: var(--bg-2);
   box-shadow: var(--shadow-pop);
   animation: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Scrollable middle. min-height:0 lets it shrink inside the flex column, and
+   overflow-y:auto is what keeps an open .sel-menu inside the scrollport. */
+.modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px;
+}
+/* Heading + footer are direct children of .modal, so they never scroll away. */
+.modal > h2 {
+  flex: none;
+  margin: 0;
+  padding: 28px 28px 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 @keyframes pop {
   from {
@@ -1222,11 +1260,12 @@ main {
     opacity: 0;
   }
 }
-.modal h2 {
-  margin: 0 0 22px;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+.modal > .modal-actions {
+  flex: none;
+  margin: 0;
+  padding: 16px 28px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
 }
 .field {
   margin-bottom: 16px;
@@ -1421,12 +1460,6 @@ main {
   line-height: 1.5;
   color: var(--text-4);
 }
-.preset-scroll {
-  max-height: 52vh;
-  overflow-y: auto;
-  margin: 0 -6px;
-  padding: 0 6px;
-}
 .preset-group {
   margin-bottom: 18px;
 }
@@ -1597,21 +1630,6 @@ main {
   flex-direction: column;
   gap: 40px;
 }
-.admin-group-title {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 0 0 20px;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.admin-group-count {
-  font: 500 12px/1 var(--mono);
-  color: var(--text-4);
-}
 .admin-subgroup {
   margin-bottom: 24px;
 }
@@ -1656,7 +1674,6 @@ main {
   .modal {
     width: 100%;
     max-height: 88vh;
-    overflow-y: auto;
   }
   .choice-grid,
   .choice-grid-3 {
@@ -1725,8 +1742,17 @@ main {
     align-items: flex-end;
   }
   .modal {
-    padding: 20px;
+    max-height: 92vh;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .modal-scroll {
+    padding: 20px;
+  }
+  .modal > h2 {
+    padding: 20px 20px 0;
+  }
+  .modal > .modal-actions {
+    padding: 14px 20px 16px;
   }
   .modal-actions {
     flex-wrap: wrap;

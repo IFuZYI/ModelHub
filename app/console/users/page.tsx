@@ -184,39 +184,43 @@ export default function AdminUsersPage() {
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>新建用户</h2>
-            <form onSubmit={createUser}>
-              <div className="field">
-                <label>用户名</label>
-                <input value={username} onChange={(e) => setUsername(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label>邮箱（可选）</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div className="field">
-                <label>密码</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label>角色</label>
-                <Select
-                  ariaLabel="角色"
-                  value={newRole}
-                  onChange={(v) => setNewRole(v as "admin" | "user")}
-                  options={[
-                    { value: "user", label: "用户" },
-                    { value: "admin", label: "管理员" },
-                  ]}
-                />
-              </div>
-              {err && <div className="error-box">{err}</div>}
-              <div className="modal-actions">
-                <button type="button" className="btn secondary" onClick={() => setShowCreate(false)}>
-                  取消
-                </button>
-                <button type="submit" className="btn">创建</button>
-              </div>
-            </form>
+            <div className="modal-scroll">
+              <form id="create-user-form" onSubmit={createUser}>
+                <div className="field">
+                  <label>用户名</label>
+                  <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+                </div>
+                <div className="field">
+                  <label>邮箱（可选）</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>密码</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </div>
+                <div className="field">
+                  <label>角色</label>
+                  <Select
+                    ariaLabel="角色"
+                    value={newRole}
+                    onChange={(v) => setNewRole(v as "admin" | "user")}
+                    options={[
+                      { value: "user", label: "用户" },
+                      { value: "admin", label: "管理员" },
+                    ]}
+                  />
+                </div>
+                {err && <div className="error-box">{err}</div>}
+              </form>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setShowCreate(false)}>
+                取消
+              </button>
+              <button type="submit" form="create-user-form" className="btn">
+                创建
+              </button>
+            </div>
           </div>
         </div>
       )}

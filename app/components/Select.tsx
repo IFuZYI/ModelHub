@@ -3,6 +3,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useCallback,
@@ -12,6 +13,17 @@ import {
 export interface SelectOption {
   value: string;
   label: string;
+}
+
+/** Nearest ancestor that scrolls vertically — the box a popup gets clipped by. */
+function nearestScrollParent(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement;
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+    node = node.parentElement;
+  }
+  return null;
 }
 
 interface Props {
@@ -39,6 +51,9 @@ export default function Select({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0); // highlighted index while open
+  /** Flip the menu above the trigger when it would overflow the viewport or
+      the nearest scrollport (e.g. the modal body). */
+  const [dropUp, setDropUp] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const autoId = useId();
@@ -74,6 +89,48 @@ export default function Select({
       });
     }
   }, [open, selectedIndex]);
+
+  // Decide the drop direction before paint: measure the menu once mounted and
+  // flip it up when it would be clipped below (by the viewport OR a scrollport).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const root = rootRef.current;
+      const menu = listRef.current;
+      if (!root || !menu) return;
+      const rootRect = root.getBoundingClientRect();
+      const menuHeight = menu.offsetHeight;
+      const boundary = nearestScrollParent(root);
+      const limitBottom = boundary
+        ? Math.min(innerHeight, boundary.getBoundingClientRect().bottom)
+        : innerHeight;
+      const limitTop = boundary
+        ? Math.max(0, boundary.getBoundingClientRect().top)
+        : 0;
+      const fitsBelow = rootRect.bottom + 6 + menuHeight <= limitBottom;
+      const fitsAbove = rootRect.top - 6 - menuHeight >= limitTop;
+      setDropUp(!fitsBelow && fitsAbove);
+    };
+    measure();
+    const boundary = nearestScrollParent(rootRef.current!);
+    const onScrollOrResize = () => measure();
+    boundary?.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      boundary?.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open]);
+
+  // Close on scroll of the enclosing scrollport — the menu is absolutely
+  // positioned, so scrolling away would leave it visually detached.
+  useEffect(() => {
+    if (!open) return;
+    const boundary = nearestScrollParent(rootRef.current!);
+    if (!boundary) return;
+    boundary.addEventListener("scroll", close, { passive: true });
+    return () => boundary.removeEventListener("scroll", close);
+  }, [open, close]);
 
   function commit(index: number) {
     const opt = options[index];
@@ -133,7 +190,9 @@ export default function Select({
   return (
     <div
       ref={rootRef}
-      className={`sel${open ? " open" : ""}${className ? ` ${className}` : ""}`}
+      className={`sel${open ? " open" : ""}${dropUp ? " drop-up" : ""}${
+        className ? ` ${className}` : ""
+      }`}
     >
       <button
         type="button"
