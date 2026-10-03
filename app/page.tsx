@@ -6,7 +6,7 @@ import SiteHeader from "./components/SiteHeader";
 import Select from "./components/Select";
 import ProviderAvatar from "./components/ProviderAvatar";
 import { TypeBadge, FreeBadge, Stars } from "./components/badges";
-import { hostOf, categoryOf, timeAgo } from "./lib/display";
+import { hostOf, categoryOf, filterHitsByCategory, timeAgo } from "./lib/display";
 import { fetchAuthStatus, logout } from "./lib/api";
 import { PublicProvider } from "@/lib";
 
@@ -161,6 +161,17 @@ export default function Home() {
 
   const searchingMode = query.trim().length > 0;
 
+  // Category chips apply to search hits as well as the directory list, so the
+  // 官方/其他 filter stays usable while searching (previously the chips were
+  // hidden in search mode and hits were never filtered).
+  const visibleHits = useMemo(
+    () => filterHitsByCategory(hits ?? [], catFilter),
+    [hits, catFilter]
+  );
+  // Count reflects the visible (filtered) set so "N 个站点命中" matches the
+  // cards below it; falls back to the server total only before hits arrive.
+  const filteredSearchTotal = hits === null ? searchTotal : visibleHits.length;
+
   return (
     <>
       <SiteHeader
@@ -215,27 +226,30 @@ export default function Home() {
               ]}
             />
           </div>
-          {!searchingMode && (
-            <div className="filter-row">
-              {(["all", "official", "other"] as const).map((t) => (
-                <button
-                  key={t}
-                  className={`filter-chip ${catFilter === t ? "active" : ""}`}
-                  onClick={() => setCatFilter(t)}
-                >
-                  {t === "all" ? "全部" : t === "official" ? "官方" : "其他"}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Category chips stay visible in search mode too: they filter the
+              cross-site hits below (same 官方/其他 taxonomy as the directory
+              list). Hiding them while searching made the filter unreachable —
+              users could not narrow a search to official/other sites. */}
+          <div className="filter-row">
+            {(["all", "official", "other"] as const).map((t) => (
+              <button
+                key={t}
+                className={`filter-chip ${catFilter === t ? "active" : ""}`}
+                onClick={() => setCatFilter(t)}
+              >
+                {t === "all" ? "全部" : t === "official" ? "官方" : "其他"}
+              </button>
+            ))}
+          </div>
         </section>
 
         {searchingMode ? (
           <SearchResults
-            hits={hits}
+            hits={visibleHits}
             searching={searching}
-            total={searchTotal}
+            total={filteredSearchTotal}
             query={query}
+            category={catFilter}
           />
         ) : (
           <>
@@ -299,11 +313,13 @@ function SearchResults({
   searching,
   total,
   query,
+  category,
 }: {
   hits: SearchHit[] | null;
   searching: boolean;
   total: number;
   query: string;
+  category: "all" | "official" | "other";
 }) {
   if (searching && hits === null) return <div className="spin">搜索中…</div>;
   if (!hits) return null;
@@ -316,7 +332,9 @@ function SearchResults({
       </div>
       {hits.length === 0 ? (
         <div className="empty">
-          没有站点包含 “{query}”。可尝试模型名或来源。
+          {category === "all"
+            ? `没有站点包含 “${query}”。可尝试模型名或来源。`
+            : `当前「${category === "official" ? "官方" : "其他"}」分类下没有命中站点，可切换「全部」查看。`}
         </div>
       ) : (
         <div className="search-hits">

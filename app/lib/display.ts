@@ -23,6 +23,19 @@ export function categoryOf(type: ProviderType): "official" | "other" {
   return type === "native" || type === "proxy" ? "official" : "other";
 }
 
+/**
+ * Filter search hits by top-level category. The homepage chips apply to both
+ * the directory list and cross-site search results, so the same taxonomy
+ * (official = native/proxy, other = newapi/custom) must hold in both places.
+ */
+export function filterHitsByCategory<T extends { type: ProviderType }>(
+  hits: T[],
+  category: "all" | "official" | "other"
+): T[] {
+  if (category === "all") return hits;
+  return hits.filter((h) => categoryOf(h.type) === category);
+}
+
 export function typeLabel(type: ProviderType): string {
   switch (type) {
     case "native":

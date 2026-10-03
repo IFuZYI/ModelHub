@@ -5,6 +5,7 @@ import {
   modelVendor,
   vendorLabel,
   normalizeVendorKey,
+  filterHitsByCategory,
 } from "../app/lib/display";
 import { toPublicView } from "@/lib/domain/provider";
 import type { StoredProvider } from "@/lib/domain/provider";
@@ -161,5 +162,43 @@ describe("normalizeVendorKey", () => {
     expect(normalizeVendorKey("meta-llama")).toBe("meta");
     expect(normalizeVendorKey("mistralai")).toBe("mistral");
     expect(normalizeVendorKey("openai")).toBe("openai");
+  });
+});
+
+describe("filterHitsByCategory", () => {
+  const hits = [
+    { id: "a", type: "native" as const },
+    { id: "b", type: "proxy" as const },
+    { id: "c", type: "newapi" as const },
+    { id: "d", type: "custom" as const },
+  ];
+
+  it("returns everything for the 'all' chip", () => {
+    expect(filterHitsByCategory(hits, "all").map((h) => h.id)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
+  });
+
+  it("keeps native/proxy for 'official' (官方)", () => {
+    expect(filterHitsByCategory(hits, "official").map((h) => h.id)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it("keeps newapi/custom for 'other' (其他)", () => {
+    expect(filterHitsByCategory(hits, "other").map((h) => h.id)).toEqual([
+      "c",
+      "d",
+    ]);
+  });
+
+  it("returns an empty list when nothing matches, not the unfiltered list", () => {
+    expect(
+      filterHitsByCategory([{ id: "x", type: "newapi" as const }], "official")
+    ).toEqual([]);
   });
 });
