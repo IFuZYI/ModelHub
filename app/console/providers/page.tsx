@@ -11,6 +11,7 @@ import { fetchAuthStatus, importNewapiSite, apiErrorMessage } from "../../lib/ap
 import { ProviderType, FreeTier } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
 import type { OfficialPreset } from "@/lib/domain/presets";
+import { CATALOG_SLUG_FIELDS } from "../../lib/providerForm";
 
 /** The current user's provider (mirror of lib UserProviderView, client-side). */
 interface ProviderView {
@@ -66,29 +67,12 @@ interface FormState {
   tags: string[];
 }
 
-/** Catalog slug inputs shown for official providers (adapter id + labels). */
-const CATALOG_SLUG_FIELDS: {
-  id: string;
-  label: string;
-  placeholder: string;
-}[] = [
-  {
-    id: "spullara",
-    label: "模型接口",
-    placeholder:
-      "如 openai，或完整链接 https://raw.githubusercontent.com/spullara/models/refs/heads/main/openai.txt",
-  },
-  {
-    id: "models-dev",
-    label: "models.dev 目录 slug",
-    placeholder: "如 openai、anthropic、google、openrouter",
-  },
-  {
-    id: "litellm",
-    label: "LiteLLM 目录 slug",
-    placeholder: "如 openai、together_ai、vercel_ai_gateway",
-  },
-];
+/**
+ * Catalog slug inputs shown for official providers (adapter id + labels).
+ *
+ * Declared once in lib/providerForm.ts, shared with the full-page editor —
+ * two copies of this list would drift.
+ */
 
 const EMPTY_FORM: FormState = {
   name: "",
