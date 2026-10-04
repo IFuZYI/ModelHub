@@ -1021,7 +1021,11 @@ main {
   display: inline-block;
   color: var(--text-3);
   font-size: 13px;
-  margin: 44px 0 20px;
+  /* WCAG 2.5.8: an 18px-tall text link is under the 24px minimum target
+     size; the padding lifts the hit area without moving the text. */
+  padding: 3px 0;
+  min-height: 24px;
+  margin: 41px 0 17px;
   transition: 0.15s ease;
 }
 .back-link:hover {
@@ -2102,12 +2106,22 @@ main {
   border: none;
   color: var(--text-4);
   cursor: pointer;
-  padding: 0 2px;
+  /* WCAG 2.5.8: the × is a destructive control, so give it a real hit area
+     (13x13 as text-only failed the 24px minimum). */
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: -4px -4px -4px 0;
   font-size: 13px;
   line-height: 1;
+  border-radius: 6px;
 }
 .tag-edit-item button:hover {
   color: var(--text);
+  background: var(--surface-hover);
 }
 
 /* profile form */
@@ -2223,7 +2237,10 @@ main {
   .filter-chip,
   .console-drawer-toggle,
   .star-btn,
-  .brand {
+  .brand,
+  .back-link,
+  .tag-chip,
+  .tag-edit-item button {
     min-height: 44px;
   }
   .icon-btn {
@@ -2236,6 +2253,12 @@ main {
   }
   .toggle-row {
     min-height: 44px;
+  }
+  /* Text links inside a chip need the box to grow with the height. */
+  .back-link,
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
   }
 }
 

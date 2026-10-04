@@ -160,10 +160,17 @@ MEASURE_JS = r"""
       const r = rect(el);
       if (r.width === 0) continue;
       if (r.height < 32 || r.width < 24) {
+        // A control wrapped in a <label> (or with an explicit larger parent
+        // hit area) is clickable across that whole box — measuring only the
+        // inner input reports a 13x13 "defect" on a 308x44 toggle row.
+        const lbl = el.closest('label');
+        const eff = lbl ? rect(lbl) : r;
+        if (eff.height >= 32 && eff.width >= 24) continue;
         small.push({
           sel: desc(el),
           text: (el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 24),
           w: Math.round(r.width), h: Math.round(r.height),
+          effW: Math.round(eff.width), effH: Math.round(eff.height),
         });
       }
     }
@@ -375,10 +382,16 @@ def main():
     with sync_playwright() as pw:
         browser = pw.chromium.launch(args=["--no-sandbox"])
         for width in WIDTHS:
+            # Phone widths emulate a touch device so `(pointer: coarse)`
+            # matches — that is what the stylesheet keys its mobile hit-area
+            # rules off. Without it the probe measured desktop-sized controls
+            # at phone widths and flagged targets that are 44px on a real
+            # phone. Wider viewports keep a fine pointer (desktop reality).
             ctx = browser.new_context(
                 viewport={"width": width, "height": 900},
                 storage_state=args.storage,
                 device_scale_factor=1,
+                has_touch=width <= 480,
             )
             page = ctx.new_page()
             console_msgs = []
