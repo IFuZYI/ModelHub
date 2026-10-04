@@ -37,8 +37,9 @@ AI API 站点目录平台。用户各自维护自己的 API 站点与实时模�
   个人分享页始终展示站点主人自己的码。站点侧填 `RANDOM` 即从池中随机。
   见 [ADR-0015](docs/adr/0015-invite-code-pool.md)
 - 全服统计：按 `normalized_base_url` 聚合的全服站点视图，可一键收编
-- 数据迁移：整站导出 / 导入（用户、站点、模型缓存、标签、评分、评论、统计、设置），
-  用于换服务器；用户密码以哈希携带，迁移后无需重置。见 [ADR-0014](docs/adr/0014-data-transfer.md)
+- 数据迁移：整站导出 / 导入（12 张表：用户、个人资料、站点、模型缓存、标签、站点标签关联、
+  评分、评论、全服统计、key 池、邀请码池、设置），用于换服务器；用户密码以哈希携带，
+  迁移后无需重置。见 [ADR-0014](docs/adr/0014-data-transfer.md)
 
 ## 技术栈
 
@@ -155,13 +156,13 @@ lock，避免并发写死锁或静默丢链。
 | POST | `/api/providers` | 新建站点（属主） |
 | PUT/DELETE | `/api/providers/:id` | 编辑 / 删除（属主） |
 | POST | `/api/providers/:id/refresh` | 立即重抓 |
-| PUT | `/api/providers/:id/ratings` | 评分（0–5） |
+| GET/PUT/DELETE | `/api/providers/:id/ratings` | 查看 / 评分（0–5）/ 撤销评分 |
 | POST | `/api/providers/:id/comments` | 发表评论 |
 | PUT | `/api/providers/:id/tags` | 替换站点标签（属主） |
 | DELETE | `/api/comments/:id` | 删除评论（作者或站点主人） |
 | GET/PUT | `/api/me/profile` | 个人资料 |
 | POST | `/api/me/password` | 修改密码 |
-| POST | `/api/me/slug` | 生成个人页 slug |
+| POST/DELETE | `/api/me/slug` | 生成 / 撤销个人页 slug |
 | GET | `/api/me/providers` | 我的站点（含状态诊断） |
 | POST | `/api/providers/import` | NewAPI 站点探测导入 |
 
