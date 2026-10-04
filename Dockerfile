@@ -11,6 +11,10 @@ RUN npm ci
 FROM node:22-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# Build-time only: Next bakes rewrites (incl. the MODELHUB_ADMIN_PATH alias)
+# into routes-manifest.json during `next build`, so this must be an ARG passed
+# to the build stage — a runtime env var would have no effect.
+ARG MODELHUB_ADMIN_PATH
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

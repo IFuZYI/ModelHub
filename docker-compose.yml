@@ -15,6 +15,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # MODELHUB_ADMIN_PATH is baked in at build time (see the Dockerfile), so
+      # it must be passed as a build arg, not a runtime env var.
+      args:
+        MODELHUB_ADMIN_PATH: ${MODELHUB_ADMIN_PATH:-}
     image: modelhub:local
     # Bind to loopback only — private tool, do not expose publicly.
     # Host port is configurable via MODELHUB_PORT (default 3000).
@@ -30,6 +34,10 @@ services:
       # Opt-in SSRF escape hatch (default off). Set MODELHUB_ALLOW_PRIVATE_FETCH=true
       # in .env when this instance must probe a relay on your own LAN.
       MODELHUB_ALLOW_PRIVATE_FETCH: ${MODELHUB_ALLOW_PRIVATE_FETCH:-false}
+      # Upstream fetch tuning (all optional; defaults live in lib/config/env.ts).
+      MODELHUB_FETCH_TIMEOUT_MS: ${MODELHUB_FETCH_TIMEOUT_MS:-15000}
+      MODELHUB_FETCH_RETRIES: ${MODELHUB_FETCH_RETRIES:-2}
+      MODELHUB_REFRESH_CONCURRENCY: ${MODELHUB_REFRESH_CONCURRENCY:-4}
       # Defaults to the bundled postgres service (only used when
       # DATABASE_DRIVER=postgres). The password is interpolated from
       # POSTGRES_PASSWORD so this URL can never drift from the credential the

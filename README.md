@@ -107,7 +107,8 @@ app/api/**            薄路由：鉴权守卫 + 入站校验 + 错误信封
   ↓
 lib/services/**       用例层：authService / userProviderService / blogService /
                       searchService / publicService / statsService / keyPoolService /
-                      settingsService / userService / importer / mailer / probe
+                      settingsService / userService / inviteCodeService /
+                      transferService / scheduler / importer / mailer / probe
   ↓
 lib/infra/**          db（Kysely 双方言 + 迁移）、repositories（数据访问）、
                       crypto（AES-256-GCM）、password（scrypt）、logger（pino）
@@ -196,6 +197,7 @@ lock，避免并发写死锁或静默丢链。
 | `MODELHUB_DATA_PATH` | `./data` | SQLite 数据目录（或 `.db` 路径） |
 | `DATABASE_DRIVER` | `sqlite` | `sqlite` \| `postgres` |
 | `DATABASE_URL` | — | postgres 连接串（driver=postgres 时必填） |
+| `MODELHUB_ADMIN_PATH` | `/admin` | 自定义后台路径（仅混淆 URL，非鉴权）。**构建期变量**：Next 的 rewrites 在 `next build` 时烘进 routes-manifest，运行时设置无效，需重新构建（Docker 场景：改 `.env` 后 `docker compose up --build -d`） |
 | `MODELHUB_REFRESH_INTERVAL_HOURS` | `6` | 自动刷新间隔 |
 | `MODELHUB_FETCH_TIMEOUT_MS` / `MODELHUB_FETCH_RETRIES` / `MODELHUB_REFRESH_CONCURRENCY` | `15000` / `2` / `4` | 抓取超时 / 重试 / 并发调优 |
 | `MODELHUB_ALLOW_PRIVATE_FETCH` | 关 | 允许探测回环 / 内网地址（自托管场景探测 LAN 上的中转站时才开）。默认关闭，因为任何登录用户都能借站点导入 / 刷新触发服务端请求，开放后会成为 SSRF 通道（可探 169.254.169.254 等） |
@@ -210,7 +212,9 @@ npm start            # 启动生产服务
 npm run typecheck    # tsc 类型检查
 npm run lint         # ESLint
 npm run format       # Prettier 格式化
+npm run format:check # 只检查格式不写入（CI 用）
 npm run test         # vitest 单元测试（29 文件 / 199 用例）
+npm run test:watch   # vitest 监听模式
 ```
 
 运维 / 审计辅助脚本（`scripts/`）：
@@ -221,6 +225,7 @@ npm run test         # vitest 单元测试（29 文件 / 199 用例）
 | `ui_checks.py` | UI 布局 / 对比度 / 表单标签测量 |
 | `ui_theme_responsive.py` | 浅色主题 AA + 导航可达性 |
 | `ui_interactions.py` | 焦点 / 键盘 / 删除确认 |
+| `ui_probe.py` | 单页 UI 探针（调试用） |
 | `associate_labels.py` | 批量给 JSX 补 `htmlFor`+`id` |
 | `seed-official.mjs` | 把内置官方站点预设写入运行中的实例（幂等） |
 | `run-test-env.sh` | 启动本地测试实例（端口 9000） |

@@ -10,6 +10,12 @@ coverage
 *.log
 tsconfig.tsbuildinfo
 
+# Agent tooling trees (not part of the app; .agents alone is ~49MB, half the
+# build context, and COPY . . would otherwise drag it into the builder layer).
+.agents
+.hermes
+skills-lock.json
+
 # Local data (SQLite DB + legacy JSON) must never enter the image.
 data
 data-test
