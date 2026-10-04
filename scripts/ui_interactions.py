@@ -91,47 +91,66 @@ def main():
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(500)
 
-        # ---- 3. the edit modal is scrollable at a short viewport ----
+        # ---- 3. editing opens the full-page editor, not a modal ----
+        # Both entry points (overview cards, sites list) must land on
+        # /console/providers/{id}, so check the list's 编辑 link navigates and
+        # the page carries the editor's own title.
         ctx2 = browser.new_context(
             viewport={"width": 1024, "height": 620}, storage_state=STATE
         )
         page2 = ctx2.new_page()
         page2.goto(BASE + "/console/providers", wait_until="networkidle")
         page2.wait_for_timeout(800)
-        edit = page2.query_selector('button:has-text("编辑")')
-        if edit:
-            edit.click()
-            page2.wait_for_timeout(900)
-            res = page2.evaluate("""(() => {
-              const m = document.querySelector('.modal');
-              if (!m) return { err: 'no modal' };
-              const body = m.querySelector('.modal-scroll') || m;
-              const save = [...m.querySelectorAll('button')]
-                .find(b => /保存/.test(b.textContent));
-              const sb = save ? save.getBoundingClientRect() : null;
-              return {
-                modalH: Math.round(m.getBoundingClientRect().height),
-                vh: window.innerHeight,
-                scrollable: body.scrollHeight > body.clientHeight,
-                bodyScrollH: body.scrollHeight,
-                bodyClientH: body.clientHeight,
-                saveVisible: sb ? (sb.top >= 0 && sb.bottom <= window.innerHeight + 1) : null,
-              };
-            })()""")
-            if res.get("err"):
-                problems.append({"kind": "modal-missing", "path": "/console/providers", **res})
+        edit = page2.query_selector('a:has-text("编辑")')
+        if not edit:
+            problems.append({
+                "kind": "edit-entry-missing",
+                "path": "/console/providers",
+                "detail": "no 编辑 link on the sites list",
+            })
+        else:
+            href = edit.get_attribute("href") or ""
+            if not href.startswith("/console/providers/"):
+                problems.append({
+                    "kind": "edit-entry-wrong-target",
+                    "path": "/console/providers",
+                    "detail": f"编辑 points at {href!r}, expected /console/providers/<id>",
+                })
             else:
-                # At a 620px viewport the modal must fit or scroll, and the save
-                # button must be reachable.
-                if res["modalH"] > res["vh"] and not res["scrollable"]:
+                edit.click()
+                page2.wait_for_timeout(1200)
+                res = page2.evaluate("""(() => {
+                  const h1 = document.querySelector('.detail-title');
+                  const modal = document.querySelector('.modal');
+                  const body = document.querySelector('.settings-form');
+                  const save = [...document.querySelectorAll('button')]
+                    .find(b => /保存/.test(b.textContent));
+                  const sb = save ? save.getBoundingClientRect() : null;
+                  return {
+                    url: location.pathname,
+                    title: h1 ? h1.textContent.trim() : null,
+                    modalOpen: !!modal,
+                    hasForm: !!body,
+                    vh: window.innerHeight,
+                    saveVisible: sb ? (sb.top >= 0 && sb.bottom <= window.innerHeight + 1) : null,
+                    docScroll: document.documentElement.scrollHeight,
+                  };
+                })()""")
+                if not res["url"].startswith("/console/providers/"):
                     problems.append({
-                        "kind": "modal-overflow-unscrollable",
+                        "kind": "edit-navigation-failed",
                         "path": "/console/providers",
                         **res,
                     })
-                if res["saveVisible"] is False and not res["scrollable"]:
+                elif res["modalOpen"]:
                     problems.append({
-                        "kind": "save-unreachable",
+                        "kind": "edit-opens-modal",
+                        "path": "/console/providers",
+                        **res,
+                    })
+                elif not res["hasForm"] or res["title"] != "编辑站点":
+                    problems.append({
+                        "kind": "editor-not-rendered",
                         "path": "/console/providers",
                         **res,
                     })
@@ -141,7 +160,7 @@ def main():
 
     if not problems:
         print("OK — focus visible on all stops, destructive actions confirm, "
-              "edit modal reachable at 620px")
+              "edit opens the full-page editor at 620px")
         return 0
     print(f"{len(problems)} interaction problems:\n")
     for p in problems:

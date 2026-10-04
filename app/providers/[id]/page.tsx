@@ -419,6 +419,7 @@ export default function ProviderDetail({
             <input
               className="search-input"
               style={{ marginBottom: 16 }}
+              aria-label="搜索模型"
               placeholder="搜索模型…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}

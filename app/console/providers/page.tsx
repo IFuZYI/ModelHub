@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import Link from "next/link";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -40,7 +41,6 @@ interface ProviderView {
 }
 
 interface FormState {
-  id?: string;
   name: string;
   /** Optional human description of the provider. */
   description: string;
@@ -238,13 +238,6 @@ export default function AdminPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
-  // True once the user types in the manual-model textarea, so a slow detail
-  // fetch can't overwrite what they typed.
-  const modelsDirtyRef = useRef(false);
-  // Provider id whose model list was successfully loaded into the form. When
-  // the detail fetch failed this stays null and submit must omit `models`
-  // rather than PUT an empty list and wipe the stored one.
-  const modelsLoadedForRef = useRef<string | null>(null);
 
   // newapi quick-import
   const [importUrl, setImportUrl] = useState("");
@@ -284,57 +277,6 @@ export default function AdminPage() {
     resetModalState();
     setFlow("menu");
     setShowModal(true);
-  }
-
-  async function openEdit(p: ProviderView) {
-    resetModalState();
-    setForm({
-      id: p.id,
-      name: p.name,
-      description: p.description ?? "",
-      type: p.type,
-      base_url: p.base_url,
-      aff_code: p.aff_code ?? "",
-      key: "",
-      icon: p.icon ?? "",
-      models: p.models ?? [],
-      manual_models: p.manual_models,
-      free_tier: p.free_tier ?? "none",
-      catalog_slugs: { ...(p.catalog_slugs ?? {}) },
-      adapter: p.adapter ?? "",
-      register_methods: p.register_methods ?? [],
-      tags: (p.tags ?? []).map((t) => t.name),
-    });
-    setFlow("form");
-    setShowModal(true);
-    // The list endpoint returns the count-only projection (no model names), so
-    // fetch the public detail for the real list. Without this the manual-model
-    // textarea starts empty and saving would wipe the stored list.
-    if (p.type === "custom" || p.type === "newapi") {
-      modelsDirtyRef.current = false;
-      modelsLoadedForRef.current = null;
-      try {
-        const res = await fetch(`/api/providers/${p.id}`, {
-          credentials: "same-origin",
-        });
-        if (res.ok) {
-          const detail = await res.json();
-          const list = Array.isArray(detail?.models)
-            ? (detail.models as string[])
-            : [];
-          modelsLoadedForRef.current = p.id;
-          // Skip if the user switched records or already edited the textarea.
-          setForm((prev) =>
-            prev.id === p.id && !modelsDirtyRef.current
-              ? { ...prev, models: list }
-              : prev
-          );
-        }
-      } catch {
-        // Leave modelsLoadedForRef null; submit omits `models` so the stored
-        // list is preserved instead of being wiped.
-      }
-    }
   }
 
   function closeModal() {
@@ -419,61 +361,44 @@ export default function AdminPage() {
     return "other";
   }
 
+  // The modal creates a provider; editing an existing one navigates to the
+  // full-page editor (/console/providers/{id}), so there is no edit branch here.
   async function submitForm(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setFormErr(null);
     try {
-      const isEdit = Boolean(form.id);
-      const url = isEdit ? `/api/providers/${form.id}` : "/api/providers";
       const body: Record<string, unknown> = {
         name: form.name,
         description: form.description.trim(),
         type: form.type,
         base_url: form.base_url.trim(),
-        // always send aff_code so clearing it on edit works ("" clears)
         aff_code: form.aff_code.trim(),
       };
-      // On edit, omit an unchanged key; an explicit clear is a separate action.
-      if (!isEdit || form.key) body.key = form.key;
-      // free_tier: always send so changing it on edit persists.
+      body.key = form.key;
       body.free_tier = form.free_tier;
       if (form.adapter) body.adapter = form.adapter;
-      // catalog_slugs: keep only non-empty entries. On edit always send (even
-      // when empty) so cleared slugs persist.
+      // catalog_slugs: keep only non-empty entries.
       const slugs = Object.fromEntries(
         Object.entries(form.catalog_slugs)
           .map(([id, v]) => [id, v.trim()])
           .filter(([, v]) => v)
       );
-      if (isEdit || Object.keys(slugs).length > 0) {
+      if (Object.keys(slugs).length > 0) {
         body.catalog_slugs = slugs;
       }
-      // On create, carry the preset's built-in model list + manual flag.
-      // For custom/newapi providers the user may edit the model list too.
-      if (!isEdit) {
-        if (form.models.length > 0) body.models = form.models;
-        if (form.manual_models) body.manual_models = true;
-      } else if (form.type === "custom" || form.type === "newapi") {
-        // Allow editing the manual model list on these types — but only once
-        // the real list actually loaded (or the user typed one). Otherwise a
-        // failed detail fetch would PUT an empty array and wipe the stored list.
-        if (modelsDirtyRef.current || modelsLoadedForRef.current === form.id) {
-          body.models = form.models;
-          body.manual_models = form.manual_models;
-        }
-      }
-      // icon: always send (empty string clears on edit).
+      // Carry the preset's built-in model list + manual flag.
+      if (form.models.length > 0) body.models = form.models;
+      if (form.manual_models) body.manual_models = true;
       body.icon = form.icon.trim();
       // register_methods: send when present (NewAPI import fills these).
       if (form.register_methods.length > 0) {
         body.register_methods = form.register_methods;
       }
-      // tags: always send (empty array clears on edit).
       body.tags = form.tags;
 
-      const res = await fetch(url, {
-        method: isEdit ? "PUT" : "POST",
+      const res = await fetch("/api/providers", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -535,9 +460,9 @@ export default function AdminPage() {
           <button className="icon-btn" onClick={() => refresh(p.id)}>
             刷新
           </button>
-          <button className="icon-btn" onClick={() => openEdit(p)}>
+          <Link className="icon-btn" href={`/console/providers/${p.id}`}>
             编辑
-          </button>
+          </Link>
           <button
             className="icon-btn"
             style={{ color: "var(--err)" }}
@@ -905,25 +830,23 @@ export default function AdminPage() {
               </>
             )}
 
-            {/* ---- flow: the actual form (create/edit) ---- */}
+            {/* ---- flow: the actual form (create) ---- */}
             {flow === "form" && (
               <>
                 <h2>
-                  {form.id
-                    ? "编辑提供商"
-                    : form.type === "native"
-                      ? "添加官方·原生 API"
-                      : form.type === "proxy"
-                        ? "添加官方·中转"
-                        : form.type === "newapi"
-                          ? "添加 NewAPI 站点"
-                          : "添加其他 / 自建"}
+                  {form.type === "native"
+                    ? "添加官方·原生 API"
+                    : form.type === "proxy"
+                      ? "添加官方·中转"
+                      : form.type === "newapi"
+                        ? "添加 NewAPI 站点"
+                        : "添加其他 / 自建"}
                 </h2>
                 <div className="modal-scroll">
                   <form id="provider-form" onSubmit={submitForm}>
                     {importNote && <div className="note-box">{importNote}</div>}
                     {presetNote && <div className="note-box">{presetNote}</div>}
-                    {!form.id && form.register_methods.length > 0 && (
+                    {form.register_methods.length > 0 && (
                       <div className="note-box">
                         支持的注册方式：
                         <div className="reg-methods">
@@ -935,7 +858,7 @@ export default function AdminPage() {
                         </div>
                       </div>
                     )}
-                    {!form.id && form.models.length > 0 && (
+                    {form.models.length > 0 && (
                       <div className="note-box">
                         已内置 {form.models.length} 个模型
                         {form.manual_models
@@ -983,27 +906,8 @@ export default function AdminPage() {
                         />
                       </div>
                     </div>
-                    {/* Type (edit only) + FREE flag share a row. New providers
-                        keep the type chosen in the flow above, so FREE goes solo. */}
+                    {/* FREE flag; the type was chosen in the flow above. */}
                     <div className="field-row">
-                      {form.id && (
-                        <div className="field">
-                          <label htmlFor="providers-966">类型</label>
-                          <Select id="providers-966"
-                            ariaLabel="提供商类型"
-                            value={form.type}
-                            onChange={(v) =>
-                              setForm({ ...form, type: v as ProviderType })
-                            }
-                            options={[
-                              { value: "native", label: "官方·原生" },
-                              { value: "proxy", label: "官方·中转" },
-                              { value: "newapi", label: "NewAPI" },
-                              { value: "custom", label: "其他 / 自建" },
-                            ]}
-                          />
-                        </div>
-                      )}
                       {/* Free-tier grade: 三档单选 ALL FREE / FREE / NO. */}
                       <div className="field">
                         <label htmlFor="providers-984">免费额度</label>
@@ -1082,7 +986,6 @@ export default function AdminPage() {
                                 .split("\n")
                                 .map((s) => s.trim())
                                 .filter(Boolean);
-                              modelsDirtyRef.current = true;
                               setForm({
                                 ...form,
                                 models: list,
@@ -1149,13 +1052,9 @@ export default function AdminPage() {
                   <button
                     type="button"
                     className="btn secondary"
-                    onClick={() =>
-                      form.id
-                        ? closeModal()
-                        : setFlow(backFlowForType(form.type))
-                    }
+                    onClick={() => setFlow(backFlowForType(form.type))}
                   >
-                    {form.id ? "取消" : "← 返回"}
+                    ← 返回
                   </button>
                   <button
                     type="submit"

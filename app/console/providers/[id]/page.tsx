@@ -7,6 +7,7 @@ import ConsoleShell from "../../../components/ConsoleShell";
 import Select from "../../../components/Select";
 import ProviderAvatar from "../../../components/ProviderAvatar";
 import { fetchAuthStatus, apiErrorMessage } from "../../../lib/api";
+import { CATALOG_SLUG_FIELDS } from "../../../lib/providerForm";
 import type { FreeTier, ProviderType } from "@/lib";
 
 interface MyProvider {
@@ -20,6 +21,8 @@ interface MyProvider {
   aff_code: string | null;
   has_key: boolean;
   manual_models: boolean;
+  /** Per-source catalog slugs (adapter id → slug) for no-key model sync. */
+  catalog_slugs?: Record<string, string>;
   models?: string[];
   tags?: { slug: string; name: string }[];
 }
@@ -122,6 +125,9 @@ export default function EditProviderPage({
   // True once the user edits the model textarea (then the list is authoritative).
   const [modelsDirty, setModelsDirty] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
+  // Per-source catalog slugs (adapter id → slug) for no-key model sync. These
+  // are only meaningful for official providers (native/proxy).
+  const [catalogSlugs, setCatalogSlugs] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -154,6 +160,7 @@ export default function EditProviderPage({
     setHasKey(p.has_key);
     setStoredManual(p.manual_models);
     setTags((p.tags ?? []).map((t) => t.name));
+    setCatalogSlugs({ ...(p.catalog_slugs ?? {}) });
     // /api/me/providers returns the count-only meta view (no `models`); the
     // public detail endpoint carries the full model list.
     const detailRes = await fetch(`/api/providers/${id}`, {
@@ -187,6 +194,12 @@ export default function EditProviderPage({
         tags,
       };
       if (key) body.key = key;
+      // Always send catalog_slugs on edit (even empty) so cleared slugs persist.
+      body.catalog_slugs = Object.fromEntries(
+        Object.entries(catalogSlugs)
+          .map(([id, v]) => [id, v.trim()])
+          .filter(([, v]) => v)
+      );
       if (type === "custom" || type === "newapi") {
         const list = models
           .split("\n")
@@ -337,6 +350,27 @@ export default function EditProviderPage({
               />
             </div>
           </details>
+          {(type === "native" || type === "proxy") && (
+            <details className="field-group">
+              <summary>模型同步来源（可选）</summary>
+              {CATALOG_SLUG_FIELDS.map((f) => (
+                <div className="field" key={f.id}>
+                  <label htmlFor={`catalog-${f.id}`}>{f.label}</label>
+                  <input
+                    id={`catalog-${f.id}`}
+                    value={catalogSlugs[f.id] ?? ""}
+                    onChange={(e) =>
+                      setCatalogSlugs({
+                        ...catalogSlugs,
+                        [f.id]: e.target.value,
+                      })
+                    }
+                    placeholder={f.placeholder}
+                  />
+                </div>
+              ))}
+            </details>
+          )}
           {err && <div className="error-box">{err}</div>}
           <button type="submit" className="btn" disabled={saving}>
             {saving ? "保存中…" : "保存并抓取"}
