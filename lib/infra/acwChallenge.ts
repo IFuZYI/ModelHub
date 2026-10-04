@@ -74,23 +74,56 @@ export function solveAcwCookieValue(body: string): string | null {
 
 /**
  * Per-run challenge state: once one endpoint on a site has been solved, the
- * cookie is sent proactively on every later request of the same run — the WAF
- * cookie is session-scoped and re-solving per URL wastes round-trips.
+ * cookie is sent proactively on every later request to the SAME origin — the
+ * WAF cookie is session-scoped and re-solving per URL wastes round-trips.
+ *
+ * The session records the origin (scheme://host:port) that minted the cookie
+ * and it is only ever attached to requests for that origin: a probe run
+ * shares one session across its whole attempt list, which includes no-key
+ * catalog fetches on unrelated hosts (models.dev, raw.githubusercontent.com,
+ * custom catalog URLs), and the provider's WAF cookie must not leak there.
+ *
+ * The session holds the MOST RECENT solve: if a second origin also serves a
+ * solvable challenge, its cookie replaces the first (safe failure — requests
+ * to the first origin then simply go out without a cookie, never with the
+ * wrong one). Current callers have at most one challenged origin per run
+ * (catalog attempts run last), so this does not arise in practice.
  */
 export interface AcwChallengeSession {
   cookie: string | null;
+  /** Origin (scheme://host) the cookie was minted for; null until solved. */
+  origin: string | null;
 }
 
 /** Fresh session (no cookie solved yet). */
 export function newAcwChallengeSession(): AcwChallengeSession {
-  return { cookie: null };
+  return { cookie: null, origin: null };
+}
+
+/**
+ * The cookie to attach for `url`: the session's solved cookie when it was
+ * minted for the same origin, else null. Exported so every call site that
+ * attaches the cookie goes through the same origin check — the no-leak
+ * invariant lives here, not in each caller.
+ */
+export function challengeCookieFor(
+  session: AcwChallengeSession | undefined,
+  url: string
+): string | null {
+  if (!session?.cookie || !session.origin) return null;
+  try {
+    return new URL(url).origin === session.origin ? session.cookie : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * GET a URL as text, transparently passing a solved acw challenge:
- *   - sends the session's cookie when one was already solved, and
+ *   - sends the session's cookie when one was already solved for this origin, and
  *   - when the response body is a solvable challenge, computes the cookie,
- *     records it on the session, and retries once.
+ *     records it on the session (with the origin it was minted for), and
+ *     retries once.
  *
  * Returns the raw Response of the (possibly retried) fetch; callers parse it
  * as JSON or text as they normally would. Non-challenge bodies and sites
@@ -106,10 +139,20 @@ export async function fetchTextSolvingAcwChallenge(
   init: RequestInit,
   session?: AcwChallengeSession
 ): Promise<Response> {
+  // Track the cookie locally so the retry always carries what THIS call just
+  // solved, even when the caller passed no session (the session only exists
+  // to share a solve across later calls). Still origin-scoped: a redirect to
+  // another host must not receive it either.
+  let cookie = challengeCookieFor(session, url);
+
   const withCookie = (): RequestInit => {
-    if (!session?.cookie) return init;
+    if (!cookie) return init;
     const headers = new Headers(init.headers);
-    headers.set("Cookie", session.cookie);
+    // Merge rather than replace: a caller-supplied Cookie header (if any)
+    // must survive the challenge round-trip. Servers read multiple cookies
+    // from one `a=1; b=2` header.
+    const existing = headers.get("Cookie");
+    headers.set("Cookie", existing ? `${existing}; ${cookie}` : cookie);
     return { ...init, headers };
   };
 
@@ -120,6 +163,10 @@ export async function fetchTextSolvingAcwChallenge(
   // reading the body (no cost on non-WAF sites, no buffering of large lists).
   const ct = (res.headers.get("content-type") ?? "").toLowerCase();
   if (ct && !ct.includes("text/html")) return res;
+
+  // 204/205 have no body by definition; reading and rebuilding them would
+  // throw ("Invalid response status code 204"). They are never challenges.
+  if (res.status === 204 || res.status === 205) return res;
 
   const body = await res.text();
   const solved = solveAcwCookieValue(body);
@@ -139,7 +186,11 @@ export async function fetchTextSolvingAcwChallenge(
     });
   }
 
-  if (session) session.cookie = `${ACW_COOKIE_NAME}=${solved}`;
+  cookie = `${ACW_COOKIE_NAME}=${solved}`;
+  if (session) {
+    session.cookie = cookie;
+    session.origin = new URL(url).origin;
+  }
   res = await fetchWithTimeout(url, withCookie());
   return res;
 }

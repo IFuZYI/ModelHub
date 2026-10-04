@@ -106,4 +106,82 @@ describe("probeModels behind an ESA acw challenge", () => {
       await new Promise<void>((r) => site.close(() => r()));
     }
   });
+
+  it("keeps the needs_key classification for an ok-but-bodyless upstream (204)", async () => {
+    // Regression guard for the 204/205 path: rebuilding `new Response("", {
+    // status: 204 })` throws a TypeError, which runAttempt treats as a
+    // transient network error — every attempt retried with backoff and the
+    // keyless run misclassified as "error" instead of the previous
+    // "needs_key". A 204 on every endpoint (no key) must still classify as
+    // needs_key, without retry storms.
+    let requests = 0;
+    const site = http.createServer((req, res) => {
+      requests++;
+      res.writeHead(204);
+      res.end();
+    });
+    await new Promise<void>((r) => site.listen(0, "127.0.0.1", () => r()));
+    const base = `http://127.0.0.1:${(site.address() as { port: number }).port}`;
+    try {
+      const r = await probeModels({
+        adapter: "openai-compatible",
+        baseUrl: base,
+        key: null,
+        catalogSlugs: {},
+      });
+      expect(r.status).toBe("needs_key");
+      expect(r.error).toBeNull();
+      // One request per endpoint (pricing, models, models-root) — no retries:
+      // a deterministic empty-body response is not a transient error.
+      expect(requests).toBe(3);
+    } finally {
+      await new Promise<void>((r) => site.close(() => r()));
+    }
+  });
+
+  it("does NOT leak the provider's cookie to catalog attempts on other origins", async () => {
+    // Security guard: the probe's attempt list includes no-key catalog
+    // fetches (spullara text list here, via a full URL slug). A cookie minted
+    // for the provider origin must not ride along to the catalog host.
+    let catalogCookie: string | null = null;
+    const catalog = http.createServer((req, res) => {
+      catalogCookie = req.headers.cookie ?? null;
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("catalog-model-1\n");
+    });
+    const provider = http.createServer((req, res) => {
+      const url = req.url ?? "";
+      const ok = (req.headers.cookie ?? "").includes(`acw_sc__v2=${COOKIE}`);
+      if (url.endsWith("/api/pricing")) {
+        if (!ok) {
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          return res.end(challenge);
+        }
+        // Solve succeeded but the list is empty → the probe moves on to
+        // /v1/models, then to the catalog attempt below.
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: true, data: [] }));
+      }
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: false, message: "Unauthorized" }));
+    });
+    await new Promise<void>((r) => catalog.listen(0, "127.0.0.1", () => r()));
+    await new Promise<void>((r) => provider.listen(0, "127.0.0.1", () => r()));
+    const cBase = `http://127.0.0.1:${(catalog.address() as { port: number }).port}`;
+    const pBase = `http://127.0.0.1:${(provider.address() as { port: number }).port}`;
+    try {
+      const r = await probeModels({
+        adapter: "openai-compatible",
+        baseUrl: pBase,
+        key: "sk-test",
+        catalogSlugs: { spullara: `${cBase}/models.txt` },
+      });
+      expect(r.models).toEqual(["catalog-model-1"]);
+      // The catalog host must NOT have received the provider's WAF cookie.
+      expect(catalogCookie ?? "").not.toContain("acw_sc__v2=");
+    } finally {
+      await new Promise<void>((r) => catalog.close(() => r()));
+      await new Promise<void>((r) => provider.close(() => r()));
+    }
+  });
 });

@@ -2,8 +2,10 @@ import { z } from "zod";
 import { AppError } from "../domain/errors";
 import { fetchWithTimeout } from "../infra/http";
 import {
+  challengeCookieFor,
   fetchTextSolvingAcwChallenge,
   newAcwChallengeSession,
+  type AcwChallengeSession,
 } from "../infra/acwChallenge";
 
 /**
@@ -84,14 +86,16 @@ async function isUsableImage(url: string, cookie?: string): Promise<boolean> {
  *      shell (HTTP 200 + text/html), which would render as a broken avatar.
  *   3. the official newapi mark, so the avatar is never a broken glyph.
  *
- * `cookie` carries a solved WAF challenge cookie (see infra/acwChallenge.ts)
- * when the site is behind one: the convention probe needs it too, or the
- * site's 307-to-itself challenge loop fails the fetch.
+ * `session` carries a solved WAF challenge (see infra/acwChallenge.ts) when
+ * the site is behind one: the convention probe needs the cookie too, or the
+ * site's 307-to-itself challenge loop fails the fetch. The cookie is fetched
+ * through the session's origin-checked accessor, so a configured logo on a
+ * third-party CDN can never receive the site's WAF cookie.
  */
 async function resolveIcon(
   rawLogo: string | undefined,
   baseUrl: string,
-  cookie?: string
+  session?: AcwChallengeSession
 ): Promise<string | null> {
   const configured = rawLogo?.trim();
   if (configured) {
@@ -102,6 +106,7 @@ async function resolveIcon(
     }
   }
   const convention = new URL("/logo.png", baseUrl).href;
+  const cookie = challengeCookieFor(session, convention) ?? undefined;
   if (await isUsableImage(convention, cookie)) return convention;
   return NEWAPI_FALLBACK_ICON;
 }
@@ -185,11 +190,7 @@ export async function importNewapiSite(
         reachable = true;
         const sn = p.data.data?.system_name?.trim();
         name = sn && sn.length ? sn : null;
-        icon = await resolveIcon(
-          p.data.data?.logo,
-          base_url,
-          challenge.cookie ?? undefined
-        );
+        icon = await resolveIcon(p.data.data?.logo, base_url, challenge);
         register_methods = extractRegisterMethods(
           p.data.data as Record<string, unknown> | undefined
         );
