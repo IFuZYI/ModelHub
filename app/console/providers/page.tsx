@@ -1010,8 +1010,8 @@ export default function AdminPage() {
                       {(form.type === "native" || form.type === "proxy") &&
                         CATALOG_SLUG_FIELDS.map((f) => (
                           <div className="field" key={f.id}>
-                            <label htmlFor="providers-1101">{f.label}</label>
-                            <input id="providers-1101"
+                            <label htmlFor={`catalog-${f.id}`}>{f.label}</label>
+                            <input id={`catalog-${f.id}`}
                               value={form.catalog_slugs[f.id] ?? ""}
                               onChange={(e) =>
                                 setForm({
