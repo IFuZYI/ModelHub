@@ -128,19 +128,29 @@ export default function ProfileSettingsPage() {
               <section className="panel">
                 <h2 className="panel-title">个人分享页</h2>
                 {slug ? (
-                  <p className="card-domain">
-                    你的公开页：
-                    <Link href={`/p/${slug}`} className="back-link">
-                      /p/{slug}
-                    </Link>
+                  <div className="card-domain" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+                    <span>
+                      你的公开页：
+                      <Link href={`/p/${slug}`} className="back-link">
+                        /p/{slug}
+                      </Link>
+                    </span>
+                    <a
+                      className="icon-btn"
+                      href={`/p/${slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="前往站点（分享页），在新标签页打开"
+                    >
+                      前往站点（分享页）↗
+                    </a>
                     <button
                       className="icon-btn"
-                      style={{ marginLeft: 12 }}
                       onClick={assignSlug}
                     >
                       重新生成
                     </button>
-                  </p>
+                  </div>
                 ) : (
                   <button className="btn secondary" onClick={assignSlug}>
                     生成个人页链接
