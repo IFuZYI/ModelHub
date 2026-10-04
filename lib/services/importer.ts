@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { AppError } from "../domain/errors";
 import { fetchWithTimeout } from "../infra/http";
+import {
+  fetchTextSolvingAcwChallenge,
+  newAcwChallengeSession,
+} from "../infra/acwChallenge";
 
 /**
  * Quick-import for newapi-style relay sites. Given any URL on the site
@@ -11,6 +15,12 @@ import { fetchWithTimeout } from "../infra/http";
  *
  * The status probe is best-effort: if the site is down or not a newapi site,
  * we still return base_url + aff_code so the admin can finish manually.
+ *
+ * Some relay sites sit behind an ESA/WAF anti-bot challenge that answers
+ * /api/status with an HTML page instead of JSON (see infra/acwChallenge.ts).
+ * A plain server-side fetch never executes that page, so the site reads as
+ * unreachable even though a browser loads it fine. When the body is a
+ * solvable challenge we retry once with the computed cookie.
  */
 
 // newapi GetStatus returns { success, data: { system_name, logo, + auth flags } }.
@@ -46,11 +56,14 @@ const statusSchema = z.object({
 export const NEWAPI_FALLBACK_ICON = "https://www.newapi.ai/logo.svg";
 
 /** True when the URL resolves to a real image (not an SPA HTML catch-all). */
-async function isUsableImage(url: string): Promise<boolean> {
+async function isUsableImage(url: string, cookie?: string): Promise<boolean> {
   try {
     const res = await fetchWithTimeout(url, {
       method: "GET",
-      headers: { Accept: "image/*" },
+      headers: {
+        Accept: "image/*",
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
     });
     if (!res.ok) return false;
     const ct = (res.headers.get("content-type") ?? "").toLowerCase();
@@ -70,10 +83,15 @@ async function isUsableImage(url: string): Promise<boolean> {
  *      serves an image: many newapi frontends answer EVERY path with their SPA
  *      shell (HTTP 200 + text/html), which would render as a broken avatar.
  *   3. the official newapi mark, so the avatar is never a broken glyph.
+ *
+ * `cookie` carries a solved WAF challenge cookie (see infra/acwChallenge.ts)
+ * when the site is behind one: the convention probe needs it too, or the
+ * site's 307-to-itself challenge loop fails the fetch.
  */
 async function resolveIcon(
   rawLogo: string | undefined,
-  baseUrl: string
+  baseUrl: string,
+  cookie?: string
 ): Promise<string | null> {
   const configured = rawLogo?.trim();
   if (configured) {
@@ -84,7 +102,7 @@ async function resolveIcon(
     }
   }
   const convention = new URL("/logo.png", baseUrl).href;
-  if (await isUsableImage(convention)) return convention;
+  if (await isUsableImage(convention, cookie)) return convention;
   return NEWAPI_FALLBACK_ICON;
 }
 
@@ -149,10 +167,17 @@ export async function importNewapiSite(
   let icon: string | null = null;
   let register_methods: string[] = [];
   let reachable = false;
+  const challenge = newAcwChallengeSession();
   try {
-    const res = await fetchWithTimeout(`${base_url}/api/status`, {
-      headers: { Accept: "application/json" },
-    });
+    const statusUrl = `${base_url}/api/status`;
+    // ESA/WAF anti-bot challenge: a 200 whose body is the challenge page, not
+    // JSON. The session solves it and retries once; the cookie is then reused
+    // for the icon probe below, which the same WAF guards.
+    const res = await fetchTextSolvingAcwChallenge(
+      statusUrl,
+      { headers: { Accept: "application/json" } },
+      challenge
+    );
     if (res.ok) {
       const json = await res.json().catch(() => null);
       const p = statusSchema.safeParse(json);
@@ -160,7 +185,11 @@ export async function importNewapiSite(
         reachable = true;
         const sn = p.data.data?.system_name?.trim();
         name = sn && sn.length ? sn : null;
-        icon = await resolveIcon(p.data.data?.logo, base_url);
+        icon = await resolveIcon(
+          p.data.data?.logo,
+          base_url,
+          challenge.cookie ?? undefined
+        );
         register_methods = extractRegisterMethods(
           p.data.data as Record<string, unknown> | undefined
         );

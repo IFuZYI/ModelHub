@@ -4,7 +4,11 @@ import { logger } from "../infra/logger";
 import type { Logger } from "../infra/logger";
 import { AppError, isAppError } from "../domain/errors";
 import type { CatalogSlugs, FetchStatus } from "../domain/provider";
-import { fetchWithTimeout } from "../infra/http";
+import {
+  fetchTextSolvingAcwChallenge,
+  newAcwChallengeSession,
+  type AcwChallengeSession,
+} from "../infra/acwChallenge";
 import { buildModelFetchAttempts } from "../upstream";
 import type { UpstreamAttempt } from "../upstream";
 
@@ -34,15 +38,18 @@ function isAuthOrUnsupportedStatus(details: unknown): boolean {
 
 async function runAttempt(
   attempt: UpstreamAttempt,
-  log: Logger
+  log: Logger,
+  challenge: AcwChallengeSession
 ): Promise<string[]> {
   const attempts = config.fetchRetries + 1;
   let lastError = "";
   for (let i = 1; i <= attempts; i++) {
     try {
-      const res = await fetchWithTimeout(attempt.request.url, {
-        headers: attempt.request.headers,
-      });
+      const res = await fetchTextSolvingAcwChallenge(
+        attempt.request.url,
+        { headers: attempt.request.headers },
+        challenge
+      );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         const msg = `HTTP ${res.status} ${res.statusText}${
@@ -85,7 +92,10 @@ async function runAttempt(
           : String(err);
       if ((isAbort || isNetwork) && i < attempts) {
         lastError = message;
-        log.warn({ attempt: attempt.name, try: i }, `transient error: ${message}`);
+        log.warn(
+          { attempt: attempt.name, try: i },
+          `transient error: ${message}`
+        );
         await sleep(250 * i);
         continue;
       }
@@ -128,16 +138,25 @@ export async function probeModels(input: ProbeInput): Promise<ProbeResult> {
   const errors: string[] = [];
   let allAuthOrUnsupported = true;
   let anyAuthFailure = false;
+  // One challenge session per probe run: a cookie solved by an earlier attempt
+  // (e.g. /api/pricing) is reused by every later one instead of re-solving.
+  const challenge = newAcwChallengeSession();
   for (const attempt of attempts) {
     try {
-      const models = await runAttempt(attempt, log);
+      const models = await runAttempt(attempt, log, challenge);
       if (models.length > 0) {
-        return { status: "ok", models: [...models].sort(), error: null, authFailed: false };
+        return {
+          status: "ok",
+          models: [...models].sort(),
+          error: null,
+          authFailed: false,
+        };
       }
       errors.push(`${attempt.name}: empty`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      const authLike = isAppError(err) && isAuthOrUnsupportedStatus(err.details);
+      const authLike =
+        isAppError(err) && isAuthOrUnsupportedStatus(err.details);
       if (!authLike) allAuthOrUnsupported = false;
       if (isAppError(err) && isAuthFailure(err.details)) anyAuthFailure = true;
       errors.push(`${attempt.name}: ${message}`);

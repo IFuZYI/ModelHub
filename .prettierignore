@@ -1,0 +1,5 @@
+# Raw byte-exact captures, not source to be styled.
+# tests/fixtures/*.html are real WAF challenge pages (see
+# lib/infra/acwChallenge.ts); the solver's regexes match their original
+# obfuscated script, so they must never be reformatted.
+tests/fixtures/

@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "http";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const ROOT = new URL("..", import.meta.url).pathname;
 
 process.env.MODELHUB_MASTER_KEY =
   process.env.MODELHUB_MASTER_KEY || Buffer.alloc(32, 7).toString("base64");
@@ -91,7 +95,10 @@ describe("importNewapiSite", () => {
       if (req.url?.endsWith("/api/status")) {
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(
-          JSON.stringify({ success: true, data: { system_name: "SPA Site", logo: "" } })
+          JSON.stringify({
+            success: true,
+            data: { system_name: "SPA Site", logo: "" },
+          })
         );
       }
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -114,7 +121,10 @@ describe("importNewapiSite", () => {
         return res.end(
           JSON.stringify({
             success: true,
-            data: { system_name: "Custom", logo: "https://cdn.example.com/my-logo.png" },
+            data: {
+              system_name: "Custom",
+              logo: "https://cdn.example.com/my-logo.png",
+            },
           })
         );
       }
@@ -138,7 +148,10 @@ describe("importNewapiSite", () => {
       if (req.url?.endsWith("/api/status")) {
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(
-          JSON.stringify({ success: true, data: { system_name: "Rel", logo: "/assets/l.png" } })
+          JSON.stringify({
+            success: true,
+            data: { system_name: "Rel", logo: "/assets/l.png" },
+          })
         );
       }
       if (req.url?.endsWith("/assets/l.png")) {
@@ -180,6 +193,118 @@ describe("importNewapiSite", () => {
     expect(r.aff_code).toBe("Z");
     expect(r.reachable).toBe(false);
     expect(r.name).toBeNull();
+  });
+
+  it("passes an ESA acw challenge: retries with the solved cookie and reads the real payload", async () => {
+    // Real challenge body captured from anyrouter.top (see fixtures). The mock
+    // site serves it until the request carries the correct acw_sc__v2 cookie —
+    // exactly what the live WAF does — then returns the normal JSON.
+    const challenge = readFileSync(
+      join(ROOT, "tests/fixtures/acw-challenge-1.html"),
+      "utf8"
+    );
+    const expectedCookie = "6ac21bd3de4e480b2df6aefeeab09f2aedea0666";
+    let cookieSeen: string | null = null;
+    const guarded = http.createServer((req, res) => {
+      const cookie = req.headers.cookie ?? "";
+      if (req.url?.endsWith("/api/status")) {
+        if (!cookie.includes(`acw_sc__v2=${expectedCookie}`)) {
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          return res.end(challenge);
+        }
+        cookieSeen = cookie;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(
+          JSON.stringify({
+            success: true,
+            data: { system_name: "Challenged API" },
+          })
+        );
+      }
+      res.writeHead(404);
+      res.end("x");
+    });
+    await new Promise<void>((r) => guarded.listen(0, "127.0.0.1", () => r()));
+    const gBase = `http://127.0.0.1:${(guarded.address() as { port: number }).port}`;
+    try {
+      const r = await importNewapiSite(`${gBase}/?aff=Q`);
+      expect(cookieSeen).not.toBeNull(); // the retry carried the solved cookie
+      expect(r.reachable).toBe(true);
+      expect(r.name).toBe("Challenged API");
+      expect(r.aff_code).toBe("Q");
+    } finally {
+      await new Promise<void>((r) => guarded.close(() => r()));
+    }
+  });
+
+  it("stays best-effort when a challenge cannot be solved", async () => {
+    // A challenge-shaped page with no arg1 seed: the solver returns null and
+    // the importer must keep the pre-existing best-effort result, not throw.
+    const unsolvable = http.createServer((req, res) => {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end("<html><script>var arg1='not-hex';</script></html>");
+    });
+    await new Promise<void>((r) =>
+      unsolvable.listen(0, "127.0.0.1", () => r())
+    );
+    const uBase = `http://127.0.0.1:${(unsolvable.address() as { port: number }).port}`;
+    try {
+      const r = await importNewapiSite(`${uBase}/?aff=U`);
+      expect(r.base_url).toBe(uBase);
+      expect(r.aff_code).toBe("U");
+      expect(r.reachable).toBe(false);
+      expect(r.name).toBeNull();
+    } finally {
+      await new Promise<void>((r) => unsolvable.close(() => r()));
+    }
+  });
+
+  it("reuses the solved challenge cookie for the icon probe", async () => {
+    // Live anyrouter.top behaviour: without the cookie, /logo.png answers a
+    // 307 redirect to itself (an infinite loop the fetch layer aborts);
+    // with it, the real PNG. The importer must reuse the cookie it solved.
+    const challenge = readFileSync(
+      join(ROOT, "tests/fixtures/acw-challenge-1.html"),
+      "utf8"
+    );
+    const expectedCookie = "6ac21bd3de4e480b2df6aefeeab09f2aedea0666";
+    const site = http.createServer((req, res) => {
+      const ok = (req.headers.cookie ?? "").includes(
+        `acw_sc__v2=${expectedCookie}`
+      );
+      if (req.url?.endsWith("/api/status")) {
+        if (!ok) {
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          return res.end(challenge);
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(
+          JSON.stringify({
+            success: true,
+            data: { system_name: "Icon Site", logo: "" },
+          })
+        );
+      }
+      if (req.url?.endsWith("/logo.png")) {
+        if (!ok) {
+          res.writeHead(307, { Location: "/logo.png" });
+          return res.end();
+        }
+        res.writeHead(200, { "Content-Type": "image/png" });
+        return res.end("PNG");
+      }
+      res.writeHead(404);
+      res.end("x");
+    });
+    await new Promise<void>((r) => site.listen(0, "127.0.0.1", () => r()));
+    const sBase = `http://127.0.0.1:${(site.address() as { port: number }).port}`;
+    try {
+      const r = await importNewapiSite(`${sBase}/`);
+      expect(r.icon).toBe(`${sBase}/logo.png`);
+      expect(r.name).toBe("Icon Site");
+    } finally {
+      await new Promise<void>((r) => site.close(() => r()));
+    }
   });
 
   it("rejects a non-http URL", async () => {
