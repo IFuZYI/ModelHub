@@ -251,12 +251,18 @@ docker compose up --build -d
 **PostgreSQL 后端**（可选，compose profile）：
 
 ```bash
-export POSTGRES_PASSWORD=改成强密码            # 可选，默认 modelhub
+export POSTGRES_PASSWORD=改成强密码            # 可选，默认 modelhub（仅供本机测试）
 DATABASE_DRIVER=postgres docker compose --profile postgres up --build -d
 ```
 
 postgres 服务不对外发布端口，仅在 compose 网络内可达；`modelhub` 会等它 healthy
-后再启动。改了 `POSTGRES_PASSWORD` 时，同时设置 `DATABASE_URL` 保持一致。
+后再启动。`DATABASE_URL` 的默认值直接引用 `${POSTGRES_PASSWORD}`，所以两者不会
+脱钩 —— 只改 `POSTGRES_PASSWORD` 即可，无需同步 `DATABASE_URL`（指向外部数据库时
+才需要显式覆盖它）。
+
+> 生产部署请务必设置 `POSTGRES_PASSWORD`：默认值 `modelhub` 只适合本机测试。
+> 该变量目前有默认值（不用 postgres 的部署不应被迫设置它），所以 compose 不会
+> 替你强制；换成 `:?` 会让纯 SQLite 部署也启动失败。
 
 > 注意：Dockerfile 会在 `deps` 阶段安装 `python3/make/g++` 以编译
 > `better-sqlite3`（alpine 无 musl 预编译包），运行镜像不含工具链。

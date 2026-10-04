@@ -66,6 +66,10 @@ services:
         required: false
     # Forward signals to node so `docker compose stop` shuts down cleanly.
     init: true
+    # The container starts as root only to fix the data volume's ownership,
+    # then drops to uid 1001. Forbid regaining privileges.
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   # Optional PostgreSQL backend. Enable with `--profile postgres` and set
@@ -75,8 +79,11 @@ services:
     profiles: ["postgres"]
     environment:
       POSTGRES_USER: modelhub
-      # Not published to the host (compose-network only). Override in .env for
-      # production: POSTGRES_PASSWORD=...
+      # Not published to the host (compose-network only). Default is for local
+      # testing only — set a strong value in production. DATABASE_URL derives
+      # its password from this same variable, so the two cannot drift.
+      # Not made `:?` on purpose: compose interpolates every service regardless
+      # of profile, so requiring it would break plain SQLite deployments.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-modelhub}
       POSTGRES_DB: modelhub
     volumes:

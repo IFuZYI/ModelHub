@@ -23,6 +23,7 @@ type ComposeService = {
   environment: Record<string, string>;
   logging: { options: Record<string, string> };
   ports: string[];
+  security_opt: string[];
 };
 const compose = load(read("docker-compose.yml")) as {
   services: Record<string, ComposeService>;
@@ -115,9 +116,15 @@ describe("docker-compose.yml", () => {
   });
 
   it("requires the secrets rather than defaulting them", () => {
-    const env = compose.services.modelhub.environment;
+    const env = app.environment ?? {};
     expect(env.MODELHUB_MASTER_KEY).toContain(":?");
     expect(env.MODELHUB_ADMIN_PASSWORD).toContain(":?");
+  });
+
+  it("forbids privilege escalation", () => {
+    // The entrypoint starts as root to chown the data volume then drops to
+    // uid 1001; no-new-privileges keeps it from climbing back.
+    expect(app.security_opt ?? []).toContain("no-new-privileges:true");
   });
 });
 
