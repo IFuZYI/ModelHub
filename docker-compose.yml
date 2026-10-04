@@ -27,11 +27,23 @@ services:
       MODELHUB_MASTER_KEY: ${MODELHUB_MASTER_KEY:?set MODELHUB_MASTER_KEY (see README)}
       MODELHUB_ADMIN_PASSWORD: ${MODELHUB_ADMIN_PASSWORD:?set MODELHUB_ADMIN_PASSWORD (see README)}
       MODELHUB_REFRESH_INTERVAL_HOURS: ${MODELHUB_REFRESH_INTERVAL_HOURS:-6}
+      # Opt-in SSRF escape hatch (default off). Set MODELHUB_ALLOW_PRIVATE_FETCH=true
+      # in .env when this instance must probe a relay on your own LAN.
+      MODELHUB_ALLOW_PRIVATE_FETCH: ${MODELHUB_ALLOW_PRIVATE_FETCH:-false}
       # Defaults to the bundled postgres service (only used when
-      # DATABASE_DRIVER=postgres). If you change POSTGRES_PASSWORD, set
-      # DATABASE_URL too so the credentials match.
+      # DATABASE_DRIVER=postgres). The password is interpolated from
+      # POSTGRES_PASSWORD so this URL can never drift from the credential the
+      # postgres service actually gets; override DATABASE_URL outright to
+      # point at an external database.
       DATABASE_DRIVER: ${DATABASE_DRIVER:-sqlite}
-      DATABASE_URL: ${DATABASE_URL:-postgres://modelhub:modelhub@postgres:5432/modelhub}
+      DATABASE_URL: ${DATABASE_URL:-postgres://modelhub:${POSTGRES_PASSWORD:-modelhub}@postgres:5432/modelhub}
+    logging:
+      # Bounded container logs: without a cap, `docker compose logs` grows
+      # without limit on a long-running private deployment.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       # SQLite database + legacy-import source. The image creates /data owned by
       # the runtime user (uid 1001); a fresh named volume inherits that.
