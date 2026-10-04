@@ -1,5 +1,10 @@
+# Base image is overridable so a restricted network can point at a mirror:
+#   docker build --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine .
+# Must be declared before the first FROM to be usable in a FROM line.
+ARG NODE_IMAGE=node:22-alpine
+
 # ---- deps: install node_modules (builds native better-sqlite3) ----
-FROM node:22-alpine AS deps
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 # better-sqlite3 ships no musl prebuilt binary, so npm ci compiles it from
 # source; alpine has no toolchain by default.
@@ -8,7 +13,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # ---- build: compile the Next.js standalone bundle ----
-FROM node:22-alpine AS build
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 # Build-time only: Next bakes rewrites (incl. the MODELHUB_ADMIN_PATH alias)
@@ -20,7 +25,7 @@ COPY . .
 RUN npm run build
 
 # ---- runner: minimal runtime image ----
-FROM node:22-alpine AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

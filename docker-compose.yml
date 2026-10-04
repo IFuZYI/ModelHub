@@ -17,8 +17,11 @@ services:
       dockerfile: Dockerfile
       # MODELHUB_ADMIN_PATH is baked in at build time (see the Dockerfile), so
       # it must be passed as a build arg, not a runtime env var.
+      # NODE_IMAGE lets a restricted network point at a registry mirror:
+      #   NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine docker compose up --build -d
       args:
         MODELHUB_ADMIN_PATH: ${MODELHUB_ADMIN_PATH:-}
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
     image: modelhub:local
     # Bind to loopback only — private tool, do not expose publicly.
     # Host port is configurable via MODELHUB_PORT (default 3000).
@@ -83,6 +86,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      # Same cap as the app: postgres is chatty on a long-running deployment.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
 volumes:
