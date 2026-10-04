@@ -210,11 +210,33 @@ def main():
     except Exception:
         provider_id = None
 
+    # The personal page needs a real slug, so resolve it from the logged-in
+    # session's status payload (the storage state holds the session cookie).
+    # Without this the page was silently dropped and never actually checked.
+    slug = None
+    try:
+        state = json.load(open(STATE))
+        cookie_header = "; ".join(
+            f"{c['name']}={c['value']}" for c in state.get("cookies", [])
+            if c.get("name") and c.get("value")
+        )
+        req = urllib.request.Request(base + "/api/auth/status")
+        if cookie_header:
+            req.add_header("Cookie", cookie_header)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            slug = (json.load(r).get("user") or {}).get("slug") or None
+    except Exception:
+        slug = None
+    if not slug:
+        print("WARN: no personal-page slug available; /p/{slug} will be skipped")
+
     pages = []
     for path, label in PAGES:
         p = path.replace("{provider}", provider_id or "")
         if "{slug}" in p:
-            continue  # personal page needs a slug; added below if available
+            if not slug:
+                continue  # no slug on this instance; warned above
+            p = p.replace("{slug}", slug)
         pages.append((p, label))
 
     failures = []
