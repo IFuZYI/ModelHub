@@ -101,3 +101,7 @@ admin 站点"的范围自相矛盾。
 只在该主人（首个管理员）的站点内检索，`author` 参数与命中里的 `author` 字段一并
 移除。个人分享页 `/p/{slug}` 本就只列一个用户的站点、且无搜索框，故不提供按用户
 的搜索变体。
+
+同批修正一处从未成立的描述：上文「按 `modelDedupeKey` 去重」与实现不符——
+`searchService` 从未使用 `modelDedupeKey`（子串匹配原始模型 id，不做去重；
+`modelDedupeKey` 仅用于 `publicService.summarize()` 统计模型总数）。

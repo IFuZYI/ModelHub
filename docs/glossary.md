@@ -88,13 +88,15 @@
   含总评分与评论数。每张卡片带「前往」按钮直达站点（有邀请码时带 `?aff=`）。[v0.4]
 
 - **主页搜索 (homepage search)**：`GET /api/search`，在**主页目录**（首个管理员的
-  站点）范围内支持按**模型**（`modelDedupeKey` 去重）、**来源**（`modelVendor` 从
+  站点）范围内支持按**模型**（对模型 id 做子串匹配，不做去重——`gpt-4o` 会同时命中
+  `openai/gpt-4o`、`gpt-4o`、`GPT-4O` 等原始 id）、**来源**（`modelVendor` 从
   模型 id 推断厂商）、**标签**检索，回答"哪些站点有该模型/厂商"。范围与主页列表
   同源（`publicService.homepageOwnerId()`），不跨用户。[v0.4；搜索范围收窄见
   ADR-0013 修订]
 
-- **modelDedupeKey**：模型去重键——取模型 id 的最后路径段并小写。用于模型命中
-  去重与展示。[v0.4]
+- **modelDedupeKey**：模型去重键——取模型 id 的最后路径段并小写。用于
+  `publicService.summarize()` 统计**模型总数**（`total_model_count`）时去重；
+  **搜索不使用它**（搜索是原始 id 的子串匹配）。[v0.4]
 
 - **modelVendor**：从纯模型 id 推断厂商的函数（如 `gpt-*` → OpenAI）。逻辑位于
   `lib/domain/vendor.ts`，服务端搜索可用；前端经 `app/lib/display.ts` re-export。[v0.4]
