@@ -25,7 +25,7 @@ export function categoryOf(type: ProviderType): "official" | "other" {
 
 /**
  * Filter search hits by top-level category. The homepage chips apply to both
- * the directory list and cross-site search results, so the same taxonomy
+ * the directory list and the search results, so the same taxonomy
  * (official = native/proxy, other = newapi/custom) must hold in both places.
  */
 export function filterHitsByCategory<T extends { type: ProviderType }>(

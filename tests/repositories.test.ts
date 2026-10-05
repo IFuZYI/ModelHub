@@ -96,6 +96,53 @@ describe("UserRepository", () => {
     const bumped = await repo.update("u-1", { bump_token_version: true });
     expect(bumped?.token_version).toBe(1);
   });
+
+  it("firstActiveAdminId returns the earliest ACTIVE admin, skipping others", async () => {
+    const db = await freshDb();
+    const repo = new UserRepository(db);
+    // Insert order defines created_at order: a plain user first, then two
+    // admins — the FIRST admin wins, not the newest, and the non-admin is
+    // never a candidate.
+    await repo.insert({
+      id: "u-user",
+      username: "user",
+      email: null,
+      password_hash: "x",
+      role: "user",
+    });
+    await repo.insert({
+      id: "u-admin-1",
+      username: "admin1",
+      email: null,
+      password_hash: "x",
+      role: "admin",
+    });
+    await repo.insert({
+      id: "u-admin-2",
+      username: "admin2",
+      email: null,
+      password_hash: "x",
+      role: "admin",
+    });
+    expect(await repo.firstActiveAdminId()).toBe("u-admin-1");
+
+    // A disabled admin is skipped entirely (status matters).
+    await repo.update("u-admin-1", { status: "disabled" });
+    expect(await repo.firstActiveAdminId()).toBe("u-admin-2");
+  });
+
+  it("firstActiveAdminId returns null when no active admin exists", async () => {
+    const db = await freshDb();
+    const repo = new UserRepository(db);
+    await repo.insert({
+      id: "u-1",
+      username: "plain",
+      email: null,
+      password_hash: "x",
+      role: "user",
+    });
+    expect(await repo.firstActiveAdminId()).toBeNull();
+  });
 });
 
 describe("UserProviderRepository", () => {

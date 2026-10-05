@@ -117,7 +117,6 @@ export {
   type SearchHit,
   type SearchResult,
   type SearchOptions,
-  type SearchHitAuthor,
 } from "./services/searchService";
 export {
   transferService,

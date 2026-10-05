@@ -1,7 +1,6 @@
 import { getDatabase } from "../infra/db";
 import { UserProviderRepository } from "../infra/repositories/userProviderRepo";
 import { UserRepository } from "../infra/repositories/userRepo";
-import { UserProfileRepository } from "../infra/repositories/userProfileRepo";
 import { TagRepository } from "../infra/repositories/tagRepo";
 import { RatingRepository } from "../infra/repositories/ratingRepo";
 import { modelVendor, vendorLabel } from "../domain/vendor";
@@ -10,14 +9,6 @@ import type { ProviderType, FreeTier } from "../domain/provider";
 
 /** Cap on matched model ids returned per hit (payload size guard). */
 const MAX_MATCHED_MODELS = 120;
-
-export interface SearchHitAuthor {
-  id: string;
-  username: string;
-  display_name: string | null;
-  avatar: string | null;
-  slug: string | null;
-}
 
 export interface SearchHit {
   id: string;
@@ -29,7 +20,6 @@ export interface SearchHit {
   free_tier: FreeTier;
   model_count: number;
   updated_at: string | null;
-  author: SearchHitAuthor;
   tags: { slug: string; name: string }[];
   rating: RatingSummary;
   /** Model ids that matched the query (capped). */
@@ -49,8 +39,12 @@ export interface SearchResult {
 }
 
 export interface SearchOptions {
-  /** Filter to one author slug. */
-  author?: string;
+  /**
+   * Owner whose providers are searched. Required: search is single-owner —
+   * the homepage directory's scope (the primary admin) — and never spans
+   * users. Resolve it via publicService.homepageOwnerId().
+   */
+  ownerId: string;
   /** Filter to one tag slug. */
   tag?: string;
   /** Filter to one provider type. */
@@ -60,8 +54,13 @@ export interface SearchOptions {
 }
 
 /**
- * Cross-site search (v0.4): find which sites ("posts") have a given model or
+ * Homepage search: find which of ONE owner's sites have a given model or
  * come from a given source/vendor, plus name and tag matches.
+ *
+ * The scope is the same single-owner set the homepage directory lists
+ * (publicService.homepage() → the primary admin); searching must never
+ * surface other users' providers. A personal page (/p/:slug) has its own
+ * directory and no search box, so there is no per-user search variant.
  *
  * - model: any model id containing the query (e.g. "gpt-6")
  * - vendor: modelVendor/vendorLabel of any model contains the query
@@ -74,62 +73,55 @@ export interface SearchOptions {
 export class SearchService {
   private readonly providers: UserProviderRepository;
   private readonly users: UserRepository;
-  private readonly profiles: UserProfileRepository;
   private readonly tags: TagRepository;
   private readonly ratings: RatingRepository;
 
   constructor(
     providers = new UserProviderRepository(getDatabase()),
     users = new UserRepository(getDatabase()),
-    profiles = new UserProfileRepository(getDatabase()),
     tags = new TagRepository(getDatabase()),
     ratings = new RatingRepository(getDatabase())
   ) {
     this.providers = providers;
     this.users = users;
-    this.profiles = profiles;
     this.tags = tags;
     this.ratings = ratings;
   }
 
-  async search(rawQuery: string, options: SearchOptions = {}): Promise<SearchResult> {
+  async search(
+    rawQuery: string,
+    options: SearchOptions
+  ): Promise<SearchResult> {
     const query = rawQuery.trim().toLowerCase();
     const limit = options.limit ?? 100;
 
-    const all = await this.providers.listAll();
-    if (all.length === 0) return { query: rawQuery, hits: [], total: 0 };
-
-    const ownerIds = all.map((p) => p.user_id);
-    const [users, profiles, tagsByProvider, ratingsByProvider] = await Promise.all([
-      this.users.getIdentities(ownerIds),
-      this.profiles.getMany(ownerIds),
-      this.tags.tagsForProviders(all.map((p) => p.id)),
-      this.ratings.summariesFor(all.map((p) => p.id)),
-    ]);
-    const usersById = new Map(users.map((u) => [u.id, u]));
-
-    // Optional author filter resolves slug → user id first.
-    let authorId: string | null = null;
-    if (options.author) {
-      const u = users.find(
-        (x) => x.slug === options.author || x.username === options.author
-      );
-      if (!u) return { query: rawQuery, hits: [], total: 0 };
-      authorId = u.id;
+    // Never surface a disabled owner's sites (the personal page 404s disabled
+    // users; the route already resolves an active owner — this is the
+    // service-level guard for direct callers). getIdentities returns only
+    // id/username/slug/status, so this check never loads credentials.
+    const [owner] = await this.users.getIdentities([options.ownerId]);
+    if (!owner || owner.status !== "active") {
+      return { query: rawQuery, hits: [], total: 0 };
     }
+
+    const owned = await this.providers.listByUser(options.ownerId);
+    if (owned.length === 0) return { query: rawQuery, hits: [], total: 0 };
+
+    const [tagsByProvider, ratingsByProvider] = await Promise.all([
+      this.tags.tagsForProviders(owned.map((p) => p.id)),
+      this.ratings.summariesFor(owned.map((p) => p.id)),
+    ]);
+
     // Optional tag filter resolves slug → provider id set first.
     let tagProviderIds: Set<string> | null = null;
     if (options.tag) {
-      tagProviderIds = new Set(await this.tags.providerIdsForTagSlug(options.tag));
+      tagProviderIds = new Set(
+        await this.tags.providerIdsForTagSlug(options.tag)
+      );
     }
 
     const hits: SearchHit[] = [];
-    for (const p of all) {
-      // Hidden when the owner account is disabled (consistent with the
-      // personal page, which 404s disabled users).
-      const owner = usersById.get(p.user_id);
-      if (!owner || owner.status !== "active") continue;
-      if (authorId && p.user_id !== authorId) continue;
+    for (const p of owned) {
       if (options.type && p.type !== options.type) continue;
       if (tagProviderIds && !tagProviderIds.has(p.id)) continue;
 
@@ -176,14 +168,9 @@ export class SearchService {
 
       const hasQuery = query.length > 0;
       if (hasQuery && reasons.length === 0) continue;
-      if (!hasQuery && (options.author || options.tag || options.type)) {
-        // Filter-only browsing (no query) is allowed.
-      } else if (!hasQuery && !options.author && !options.tag && !options.type) {
-        continue; // empty query with no filters → no results
-      }
+      // Filter-only browsing (no query) needs at least one filter.
+      if (!hasQuery && !options.tag && !options.type) continue;
 
-      const user = usersById.get(p.user_id);
-      const profile = profiles.get(p.user_id);
       hits.push({
         id: p.id,
         name: p.name,
@@ -194,13 +181,6 @@ export class SearchService {
         free_tier: p.free_tier,
         model_count: p.models.length,
         updated_at: p.updated_at,
-        author: {
-          id: p.user_id,
-          username: user?.username ?? "",
-          display_name: profile?.display_name ?? null,
-          avatar: profile?.avatar ?? null,
-          slug: user?.slug ?? null,
-        },
         tags: tags.map((t) => ({ slug: t.slug, name: t.name })),
         rating:
           ratingsByProvider.get(p.id) ?? {

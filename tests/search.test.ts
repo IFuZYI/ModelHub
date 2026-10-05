@@ -9,7 +9,6 @@ import { UserRepository } from "@/lib/infra/repositories/userRepo";
 import { UserProviderRepository } from "@/lib/infra/repositories/userProviderRepo";
 import { TagRepository } from "@/lib/infra/repositories/tagRepo";
 import { RatingRepository } from "@/lib/infra/repositories/ratingRepo";
-import { UserProfileRepository } from "@/lib/infra/repositories/userProfileRepo";
 import { SearchService } from "@/lib/services/searchService";
 
 const dbs: AppDatabase[] = [];
@@ -75,7 +74,6 @@ function service(db: AppDatabase) {
   return new SearchService(
     new UserProviderRepository(db),
     new UserRepository(db),
-    new UserProfileRepository(db),
     new TagRepository(db),
     new RatingRepository(db)
   );
@@ -88,7 +86,7 @@ describe("SearchService", () => {
     await makeProvider(db, "p-1", "u-1", "Site A", ["gpt-6", "gpt-4o"]);
     await makeProvider(db, "p-2", "u-1", "Site B", ["claude-sonnet-4"]);
 
-    const result = await service(db).search("gpt-6");
+    const result = await service(db).search("gpt-6", { ownerId: "u-1" });
     expect(result.total).toBe(1);
     expect(result.hits[0].id).toBe("p-1");
     expect(result.hits[0].matched_models).toContain("gpt-6");
@@ -98,10 +96,13 @@ describe("SearchService", () => {
   it("finds sites by vendor/source name (e.g. openai)", async () => {
     const db = await freshDb();
     await makeUser(db, "u-1", "alice");
-    await makeProvider(db, "p-1", "u-1", "Site A", ["openai/gpt-4o", "xai/grok-4"]);
+    await makeProvider(db, "p-1", "u-1", "Site A", [
+      "openai/gpt-4o",
+      "xai/grok-4",
+    ]);
     await makeProvider(db, "p-2", "u-1", "Site B", ["claude-sonnet-4"]);
 
-    const result = await service(db).search("openai");
+    const result = await service(db).search("openai", { ownerId: "u-1" });
     expect(result.total).toBe(1);
     expect(result.hits[0].id).toBe("p-1");
     expect(result.hits[0].matched_vendors).toContain("openai");
@@ -111,61 +112,89 @@ describe("SearchService", () => {
   it("finds sites by provider name and base_url", async () => {
     const db = await freshDb();
     await makeUser(db, "u-1", "alice");
-    await makeProvider(db, "p-1", "u-1", "My Relay", ["m1"], "https://relay.acme.io");
+    await makeProvider(
+      db,
+      "p-1",
+      "u-1",
+      "My Relay",
+      ["m1"],
+      "https://relay.acme.io"
+    );
 
-    expect((await service(db).search("relay")).total).toBe(1);
-    expect((await service(db).search("acme")).total).toBe(1);
+    const svc = service(db);
+    expect((await svc.search("relay", { ownerId: "u-1" })).total).toBe(1);
+    expect((await svc.search("acme", { ownerId: "u-1" })).total).toBe(1);
   });
 
-  it("filters by author slug and tag", async () => {
+  it("scopes hits to the given owner — other users' sites never appear", async () => {
+    // The homepage lists ONE owner's sites (the primary admin's) and its
+    // search must return exactly that set: an unscoped search previously
+    // scanned every user's providers and surfaced other users' sites.
     const db = await freshDb();
-    await makeUser(db, "u-1", "alice", "slugalice12x");
-    await makeUser(db, "u-2", "bob", "slugbob12xy1");
+    await makeUser(db, "u-1", "alice");
+    await makeUser(db, "u-2", "bob");
+    await makeProvider(db, "p-1", "u-1", "Site A", ["gpt-6"]);
+    await makeProvider(db, "p-2", "u-2", "Site B", ["gpt-6"]);
+
+    const scoped = await service(db).search("gpt-6", { ownerId: "u-1" });
+    expect(scoped.total).toBe(1);
+    expect(scoped.hits[0].id).toBe("p-1");
+
+    const other = await service(db).search("gpt-6", { ownerId: "u-2" });
+    expect(other.total).toBe(1);
+    expect(other.hits[0].id).toBe("p-2");
+  });
+
+  it("hides the owner's sites when the account is disabled", async () => {
+    const db = await freshDb();
+    await makeUser(db, "u-1", "alice");
+    await makeProvider(db, "p-1", "u-1", "Site A", ["gpt-6"]);
+    await new UserRepository(db).update("u-1", { status: "disabled" });
+
+    const result = await service(db).search("gpt-6", { ownerId: "u-1" });
+    expect(result.total).toBe(0);
+  });
+
+  it("filters by tag within the owner scope", async () => {
+    const db = await freshDb();
+    await makeUser(db, "u-1", "alice");
+    await makeUser(db, "u-2", "bob");
     await makeProvider(db, "p-1", "u-1", "Site A", ["gpt-6"]);
     await makeProvider(db, "p-2", "u-2", "Site B", ["gpt-6"]);
 
     const tags = new TagRepository(db);
     await tags.replaceProviderTags("p-1", ["cheap"]);
+    await tags.replaceProviderTags("p-2", ["cheap"]);
 
-    const svc = service(db);
-    const byAuthor = await svc.search("gpt-6", { author: "slugalice12x" });
-    expect(byAuthor.total).toBe(1);
-    expect(byAuthor.hits[0].author.username).toBe("alice");
-
-    const byTag = await svc.search("", { tag: "cheap" });
-    expect(byTag.total).toBe(1);
-    expect(byTag.hits[0].id).toBe("p-1");
-
-    // Combined: author filter excludes the tagged provider of the other user.
-    const combined = await svc.search("gpt-6", {
-      author: "slugbob12xy1",
+    const byTag = await service(db).search("", {
+      ownerId: "u-1",
       tag: "cheap",
     });
-    expect(combined.total).toBe(0);
+    expect(byTag.total).toBe(1);
+    expect(byTag.hits[0].id).toBe("p-1");
   });
 
-  it("includes tags, rating and author in hits", async () => {
+  it("includes tags and rating in hits, without author fields", async () => {
     const db = await freshDb();
     await makeUser(db, "u-1", "alice");
     await makeProvider(db, "p-1", "u-1", "Site A", ["gpt-6"]);
     const tags = new TagRepository(db);
     await tags.replaceProviderTags("p-1", ["free"]);
     await new RatingRepository(db).upsert("p-1", "u-1", 5);
-    await new UserProfileRepository(db).upsert("u-1", {
-      display_name: "Alice A",
-    });
 
-    const result = await service(db).search("gpt-6");
+    const result = await service(db).search("gpt-6", { ownerId: "u-1" });
     const hit = result.hits[0];
     expect(hit.tags[0].slug).toBe("free");
     expect(hit.rating.average).toBe(5);
-    expect(hit.author.display_name).toBe("Alice A");
+    // Single-owner scope: the per-hit author identity is redundant and was
+    // removed from the payload (and the card UI).
+    expect(hit).not.toHaveProperty("author");
   });
 
   it("returns nothing for empty query without filters", async () => {
     const db = await freshDb();
     await makeUser(db, "u-1", "alice");
     await makeProvider(db, "p-1", "u-1", "Site A", ["gpt-6"]);
-    expect((await service(db).search("")).total).toBe(0);
+    expect((await service(db).search("", { ownerId: "u-1" })).total).toBe(0);
   });
 });

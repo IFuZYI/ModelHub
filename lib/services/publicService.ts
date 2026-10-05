@@ -219,10 +219,13 @@ export class PublicService {
     };
   }
 
-  /** The first active admin account, or undefined on a fresh install. */
-  private async firstAdmin() {
-    const users = await this.users.list();
-    return users.find((u) => u.role === "admin" && u.status === "active");
+  /**
+   * Owner id of the homepage directory (the primary admin), or null on a
+   * fresh install. Public so the homepage SEARCH can resolve the same scope:
+   * the search box must only ever return sites the directory shows.
+   */
+  async homepageOwnerId(): Promise<string | null> {
+    return this.users.firstActiveAdminId();
   }
 
   /** Current blank-aff policy (ADR-0015); "none" when unset. */
@@ -235,10 +238,10 @@ export class PublicService {
     providers: PublicProvider[];
     total_model_count: number;
   }> {
-    const admin = await this.firstAdmin();
-    if (!admin) return { providers: [], total_model_count: 0 };
+    const ownerId = await this.homepageOwnerId();
+    if (!ownerId) return { providers: [], total_model_count: 0 };
     const [owned, blankPolicy] = await Promise.all([
-      this.providers.listByUser(admin.id),
+      this.providers.listByUser(ownerId),
       this.blankPolicy(),
     ]);
     // The public directory draws from the platform pool, so every visitor sees

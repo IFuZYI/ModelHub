@@ -101,6 +101,22 @@ export class UserRepository {
       .execute();
   }
 
+  /**
+   * Id of the earliest-created ACTIVE admin — the homepage owner — or null
+   * when there is none. A targeted query so the per-render / per-search
+   * public paths never load the whole users table (or any credentials).
+   */
+  async firstActiveAdminId(): Promise<string | null> {
+    const row = await this.db
+      .selectFrom("users")
+      .select("id")
+      .where("role", "=", "admin")
+      .where("status", "=", "active")
+      .orderBy("created_at", "asc")
+      .executeTakeFirst();
+    return row?.id ?? null;
+  }
+
   async count(): Promise<number> {
     const row = await this.db
       .selectFrom("users")

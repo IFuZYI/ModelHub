@@ -27,13 +27,6 @@ interface SearchHit {
   free_tier: "full" | "free" | "none";
   model_count: number;
   updated_at: string | null;
-  author: {
-    id: string;
-    username: string;
-    display_name: string | null;
-    avatar: string | null;
-    slug: string | null;
-  };
   tags: { slug: string; name: string }[];
   rating: { average: number | null; count: number; distribution: number[] };
   matched_models: string[];
@@ -52,7 +45,7 @@ export default function Home() {
   const [catFilter, setCatFilter] = useState<CategoryFilter>("all");
   const [sort, setSort] = useState<SortKey>("rating");
 
-  // Cross-site search state.
+  // Homepage search state (single-owner scope: the homepage directory's owner).
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchTotal, setSearchTotal] = useState(0);
@@ -96,7 +89,7 @@ export default function Home() {
     if (initial) setQuery(initial);
   }, []);
 
-  // Debounced cross-site search: fires when the query has content; clears
+  // Debounced homepage search: fires when the query has content; clears
   // back to the directory list when emptied. Only the latest request commits
   // (sequence guard), and emptying the box cancels any in-flight commit.
   useEffect(() => {
@@ -192,7 +185,7 @@ export default function Home() {
           </h1>
           <p>
             汇集官方（原生 / 中转）与其他（NewAPI / 自建）API 站点，浏览各家实时可用的模型清单。
-            支持跨站搜索：按模型名或来源检索站点。
+            支持按模型名或来源检索站点。
           </p>
           <div className="stats">
             <span className="stat">
@@ -210,7 +203,7 @@ export default function Home() {
               <input
                 className="search-input"
                 aria-label="搜索站点或模型"
-                placeholder="搜索站点，或跨站检索模型与来源…"
+                placeholder="搜索站点，或按模型与来源检索…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -228,7 +221,7 @@ export default function Home() {
             />
           </div>
           {/* Category chips stay visible in search mode too: they filter the
-              cross-site hits below (same 官方/其他 taxonomy as the directory
+              search hits below (same 官方/其他 taxonomy as the directory
               list). Hiding them while searching made the filter unreachable —
               users could not narrow a search to official/other sites. */}
           <div className="filter-row">
@@ -328,7 +321,7 @@ function SearchResults({
     <>
       <div className="results-bar">
         <span>
-          跨站搜索 “{query}” — <strong>{total}</strong> 个站点命中
+          搜索 “{query}” — <strong>{total}</strong> 个站点命中
         </span>
       </div>
       {hits.length === 0 ? (
@@ -349,17 +342,7 @@ function SearchResults({
                 <ProviderAvatar name={h.name} icon={h.icon} />
                 <div className="card-identity">
                   <p className="card-title">{h.name}</p>
-                  <div className="card-domain">
-                    {hostOf(h.base_url)}
-                    {h.author.slug && (
-                      <>
-                        {" · "}
-                        <span className="hit-author">
-                          @{h.author.display_name || h.author.username}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                  <div className="card-domain">{hostOf(h.base_url)}</div>
                 </div>
                 <Stars average={h.rating.average} count={h.rating.count} />
               </div>

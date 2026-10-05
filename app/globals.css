@@ -1987,9 +1987,6 @@ main {
 .search-hit {
   cursor: pointer;
 }
-.hit-author {
-  color: var(--text-3);
-}
 .hit-models {
   display: flex;
   gap: 6px;

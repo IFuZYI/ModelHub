@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { withErrorHandling, searchService } from "@/lib";
+import { withErrorHandling, searchService, publicService } from "@/lib";
 
 export const dynamic = "force-dynamic";
 
-// Public cross-site search: find sites that carry a model ("gpt-6") or come
+// Public homepage search: find which sites carry a model ("gpt-6") or come
 // from a source/vendor ("openai"), plus name/tag matches.
-// Query params: q, author (slug), tag (slug), type, limit.
+//
+// Scope is the homepage directory's owner (the primary admin) — resolved via
+// publicService.homepageOwnerId(), the SAME owner /api/providers lists — so
+// search can never surface another user's sites.
+//
+// Query params: q, tag (slug), type, limit.
 export const GET = withErrorHandling(async (req: Request) => {
   const url = new URL(req.url);
   const q = url.searchParams.get("q") ?? "";
-  const author = url.searchParams.get("author") ?? undefined;
   const tag = url.searchParams.get("tag") ?? undefined;
   const typeParam = url.searchParams.get("type") ?? undefined;
 
@@ -33,8 +37,11 @@ export const GET = withErrorHandling(async (req: Request) => {
       ? typeParam
       : undefined;
 
+  const ownerId = await publicService.homepageOwnerId();
+  if (!ownerId) return NextResponse.json({ query: q, hits: [], total: 0 });
+
   const result = await searchService.search(q, {
-    author: author || undefined,
+    ownerId,
     tag: tag || undefined,
     type,
     limit,
