@@ -1,4 +1,4 @@
-import type { ProviderType, FetchStatus } from "@/lib";
+import type { ProviderType, FetchStatus, FreeTier } from "@/lib";
 
 /**
  * Presentation helpers shared by the front-end pages. Keeping the
@@ -34,6 +34,39 @@ export function filterHitsByCategory<T extends { type: ProviderType }>(
 ): T[] {
   if (category === "all") return hits;
   return hits.filter((h) => categoryOf(h.type) === category);
+}
+
+/** Free-tier filter selections: "all" plus each stored grade. */
+export const FREE_TIER_FILTERS = ["all", "full", "free", "none"] as const;
+export type FreeTierFilter = (typeof FREE_TIER_FILTERS)[number];
+
+/** Grade → the site's vocabulary (same labels as the console's 免费额度 select). */
+export function freeTierLabel(tier: FreeTier): string {
+  switch (tier) {
+    case "full":
+      return "ALL FREE";
+    case "free":
+      return "FREE";
+    case "none":
+      return "NO（付费）";
+    default:
+      // Defensive: an out-of-band value from old data renders as paid rather
+      // than crashing a card.
+      return "NO（付费）";
+  }
+}
+
+/**
+ * Filter sites by free-tier grade. Grades are exclusive — a site is exactly
+ * one of full/free/none — so each chip keeps only its own grade. Like the
+ * category chips, this applies to both the directory list and search hits.
+ */
+export function filterHitsByFreeTier<T extends { free_tier: FreeTier }>(
+  hits: T[],
+  filter: FreeTierFilter
+): T[] {
+  if (filter === "all") return hits;
+  return hits.filter((h) => h.free_tier === filter);
 }
 
 export function typeLabel(type: ProviderType): string {

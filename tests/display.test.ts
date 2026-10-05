@@ -6,6 +6,9 @@ import {
   vendorLabel,
   normalizeVendorKey,
   filterHitsByCategory,
+  filterHitsByFreeTier,
+  freeTierLabel,
+  FREE_TIER_FILTERS,
 } from "../app/lib/display";
 import { toPublicView } from "@/lib/domain/provider";
 import type { StoredProvider } from "@/lib/domain/provider";
@@ -199,6 +202,48 @@ describe("filterHitsByCategory", () => {
   it("returns an empty list when nothing matches, not the unfiltered list", () => {
     expect(
       filterHitsByCategory([{ id: "x", type: "newapi" as const }], "official")
+    ).toEqual([]);
+  });
+});
+
+describe("freeTierLabel", () => {
+  it("maps grades to the site's vocabulary (console + card badges)", () => {
+    expect(freeTierLabel("full")).toBe("ALL FREE");
+    expect(freeTierLabel("free")).toBe("FREE");
+    expect(freeTierLabel("none")).toBe("NO（付费）");
+  });
+});
+
+describe("FREE_TIER_FILTERS", () => {
+  it("offers all four selections, freest grade first", () => {
+    expect(FREE_TIER_FILTERS).toEqual(["all", "full", "free", "none"]);
+  });
+});
+
+describe("filterHitsByFreeTier", () => {
+  const hits = [
+    { id: "a", free_tier: "full" as const },
+    { id: "b", free_tier: "free" as const },
+    { id: "c", free_tier: "none" as const },
+  ];
+
+  it("returns everything for the 'all' chip", () => {
+    expect(filterHitsByFreeTier(hits, "all").map((h) => h.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("keeps only the selected grade — grades are exclusive", () => {
+    expect(filterHitsByFreeTier(hits, "full").map((h) => h.id)).toEqual(["a"]);
+    expect(filterHitsByFreeTier(hits, "free").map((h) => h.id)).toEqual(["b"]);
+    expect(filterHitsByFreeTier(hits, "none").map((h) => h.id)).toEqual(["c"]);
+  });
+
+  it("returns an empty list when nothing matches, not the unfiltered list", () => {
+    expect(
+      filterHitsByFreeTier([{ id: "x", free_tier: "none" as const }], "full")
     ).toEqual([]);
   });
 });

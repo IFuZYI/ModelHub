@@ -1,5 +1,5 @@
 import type { ProviderType, FetchStatus, FreeTier } from "@/lib";
-import { typeLabel, statusLabel } from "../lib/display";
+import { typeLabel, statusLabel, freeTierLabel } from "../lib/display";
 
 export function TypeBadge({ type }: { type: ProviderType }) {
   return <span className={`badge ${type}`}>{typeLabel(type)}</span>;
@@ -8,11 +8,14 @@ export function TypeBadge({ type }: { type: ProviderType }) {
 /**
  * Free-tier tag. "full" → ALL FREE, "free" → FREE, "none" → nothing.
  * Only the two free grades render; a paid provider shows no badge.
+ * Labels come from freeTierLabel (shared with the homepage filter chips) so
+ * the badge and the chips can never drift.
  */
 export function FreeBadge({ tier }: { tier: FreeTier }) {
   if (tier === "none") return null;
-  const label = tier === "full" ? "ALL FREE" : "FREE";
-  return <span className={`badge free-tag ${tier}`}>{label}</span>;
+  return (
+    <span className={`badge free-tag ${tier}`}>{freeTierLabel(tier)}</span>
+  );
 }
 
 export function StatusDot({ status }: { status: FetchStatus }) {

@@ -33,6 +33,16 @@
 - **提供商分类 (category)**：两级分类的上层，`official`（官方）/ `other`（其他）。
   驱动主页分页签。由类型推导：`native`/`proxy` → official，`newapi`/`custom` → other。
 
+- **免费额度 (free_tier)**：站点的三档免费分级——`full`（ALL FREE，完全免费）/
+  `free`（FREE，有免费额度）/ `none`（NO，付费）。三档互斥；主页卡片仅对
+  `full`/`free` 显示徽章。徽章与主页「免费额度」筛选芯片共用 `freeTierLabel`
+  的短标签；控制台的「免费额度」下拉在此之上附中文说明（如「FREE（有免费额度）」）。
+
+- **主页筛选芯片 (filter chips)**：主页两组芯片——分类（全部 / 官方 / 其他）与
+  免费额度（全部 / ALL FREE / FREE / NO（付费））。两组都同时作用于**目录列表**
+  与**搜索结果**，且可叠加；空结果文案列出当前生效的筛选。口径见
+  `app/lib/display.ts` 的 `filterHitsByCategory` / `filterHitsByFreeTier`。
+
 - **提供商类型 (type)**：两级分类的叶子，`native`（原生）/ `proxy`（中转）/
   `newapi`（NewAPI 类中转）/ `custom`（其他）。作为卡片徽章展示，**且影响表单字段与
   取数路径**——`newapi` 优先走公开 `/api/pricing` 探测，`native`/`proxy` 才有目录适配器

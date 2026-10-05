@@ -6,7 +6,16 @@ import SiteHeader from "./components/SiteHeader";
 import Select from "./components/Select";
 import ProviderAvatar from "./components/ProviderAvatar";
 import { TypeBadge, FreeBadge, Stars } from "./components/badges";
-import { hostOf, categoryOf, filterHitsByCategory, timeAgo } from "./lib/display";
+import {
+  hostOf,
+  categoryOf,
+  filterHitsByCategory,
+  filterHitsByFreeTier,
+  freeTierLabel,
+  FREE_TIER_FILTERS,
+  type FreeTierFilter,
+  timeAgo,
+} from "./lib/display";
 import { fetchAuthStatus, logout } from "./lib/api";
 import { PublicProvider } from "@/lib";
 
@@ -43,12 +52,11 @@ export default function Home() {
   const [authed, setAuthed] = useState(false);
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState<CategoryFilter>("all");
+  const [freeFilter, setFreeFilter] = useState<FreeTierFilter>("all");
   const [sort, setSort] = useState<SortKey>("rating");
 
   // Homepage search state (single-owner scope: the homepage directory's owner).
   const [hits, setHits] = useState<SearchHit[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [searchTotal, setSearchTotal] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic request id: only the latest search may commit its result, so a
   // slow stale response can't overwrite a newer one (and can't clear the
@@ -98,10 +106,8 @@ export default function Home() {
     if (!q) {
       searchSeqRef.current += 1; // invalidate in-flight responses
       setHits(null);
-      setSearching(false);
       return;
     }
-    setSearching(true);
     setHits(null); // clear old results so stale hits never render with a new query
     const seq = ++searchSeqRef.current;
     debounceRef.current = setTimeout(async () => {
@@ -111,14 +117,14 @@ export default function Home() {
         });
         if (seq !== searchSeqRef.current) return; // stale: a newer query won
         const json = await res.json();
+        // Re-check AFTER parsing: a newer query can start while the body is
+        // being read, and committing here would render the old query's hits
+        // under the new query's text.
+        if (seq !== searchSeqRef.current) return;
         setHits(json.hits ?? []);
-        setSearchTotal(json.total ?? 0);
       } catch {
         if (seq !== searchSeqRef.current) return;
         setHits([]);
-        setSearchTotal(0);
-      } finally {
-        if (seq === searchSeqRef.current) setSearching(false);
       }
     }, 250);
     return () => {
@@ -135,6 +141,7 @@ export default function Home() {
         p.name.toLowerCase().includes(q) || p.base_url.toLowerCase().includes(q)
       );
     });
+    list = filterHitsByFreeTier(list, freeFilter);
     list = [...list].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "models") return b.model_count - a.model_count;
@@ -150,20 +157,26 @@ export default function Home() {
       return b.model_count - a.model_count;
     });
     return list;
-  }, [providers, query, catFilter, sort]);
+  }, [providers, query, catFilter, freeFilter, sort]);
 
   const searchingMode = query.trim().length > 0;
 
   // Category chips apply to search hits as well as the directory list, so the
   // 官方/其他 filter stays usable while searching (previously the chips were
-  // hidden in search mode and hits were never filtered).
+  // hidden in search mode and hits were never filtered). The free-tier chips
+  // compose with them.
   const visibleHits = useMemo(
-    () => filterHitsByCategory(hits ?? [], catFilter),
-    [hits, catFilter]
+    () =>
+      filterHitsByFreeTier(
+        filterHitsByCategory(hits ?? [], catFilter),
+        freeFilter
+      ),
+    [hits, catFilter, freeFilter]
   );
   // Count reflects the visible (filtered) set so "N 个站点命中" matches the
-  // cards below it; falls back to the server total only before hits arrive.
-  const filteredSearchTotal = hits === null ? searchTotal : visibleHits.length;
+  // cards below it. The panel shows a spinner (not the bar) until hits
+  // arrive, so the count is only ever read once a result set exists.
+  const filteredSearchTotal = visibleHits.length;
 
   return (
     <>
@@ -223,15 +236,43 @@ export default function Home() {
           {/* Category chips stay visible in search mode too: they filter the
               search hits below (same 官方/其他 taxonomy as the directory
               list). Hiding them while searching made the filter unreachable —
-              users could not narrow a search to official/other sites. */}
-          <div className="filter-row">
+              users could not narrow a search to official/other sites.
+              Labelled group + aria-pressed so assistive tech can tell this
+              row's 「全部」 from the free-tier row's. */}
+          <div className="filter-row" role="group" aria-label="分类筛选">
             {(["all", "official", "other"] as const).map((t) => (
               <button
                 key={t}
                 className={`filter-chip ${catFilter === t ? "active" : ""}`}
                 onClick={() => setCatFilter(t)}
+                aria-pressed={catFilter === t}
               >
                 {t === "all" ? "全部" : t === "official" ? "官方" : "其他"}
+              </button>
+            ))}
+          </div>
+          {/* Free-tier chips: same three grades the console assigns
+              (ALL FREE / FREE / NO), applied to the directory list AND the
+              search hits. Labels come from freeTierLabel so chips and card
+              badges can never drift. The group is named by its VISIBLE label
+              (aria-labelledby) so screen readers don't announce a separate
+              aria-label in addition to the text. */}
+          <div
+            className="filter-row"
+            role="group"
+            aria-labelledby="free-tier-filter-label"
+          >
+            <span className="filter-row-label" id="free-tier-filter-label">
+              免费额度
+            </span>
+            {FREE_TIER_FILTERS.map((t) => (
+              <button
+                key={t}
+                className={`filter-chip ${freeFilter === t ? "active" : ""}`}
+                onClick={() => setFreeFilter(t)}
+                aria-pressed={freeFilter === t}
+              >
+                {t === "all" ? "全部" : freeTierLabel(t)}
               </button>
             ))}
           </div>
@@ -240,10 +281,11 @@ export default function Home() {
         {searchingMode ? (
           <SearchResults
             hits={visibleHits}
-            searching={searching}
+            loaded={hits !== null}
             total={filteredSearchTotal}
             query={query}
             category={catFilter}
+            freeTier={freeFilter}
           />
         ) : (
           <>
@@ -271,7 +313,7 @@ export default function Home() {
               <div className="empty">
                 {providers.length === 0
                   ? "还没有站点。管理员可登录后台添加。"
-                  : "没有匹配的站点。"}
+                  : "没有匹配的站点。可切换或清除筛选条件。"}
               </div>
             ) : (
               <div className="card-grid">
@@ -304,19 +346,32 @@ export default function Home() {
 
 function SearchResults({
   hits,
-  searching,
+  loaded,
   total,
   query,
   category,
+  freeTier,
 }: {
-  hits: SearchHit[] | null;
-  searching: boolean;
+  hits: SearchHit[];
+  /** False until the first response for the current query has committed. */
+  loaded: boolean;
   total: number;
   query: string;
   category: "all" | "official" | "other";
+  freeTier: FreeTierFilter;
 }) {
-  if (searching && hits === null) return <div className="spin">搜索中…</div>;
-  if (!hits) return null;
+  // Before the first result lands, show the spinner — NOT the results bar or
+  // the empty state. `hits` here is already filtered (`?? []` upstream), so
+  // the old `hits === null` test was dead code and the panel flashed
+  // 「搜索 … — 0 个站点命中」 + 「没有站点包含 …」 for the debounce+fetch window.
+  if (!loaded) return <div className="spin">搜索中…</div>;
+  // Explain which active filter narrowed the list to nothing; the message
+  // must name every chip the user set, or "没有站点" reads as "the search
+  // found nothing" when the search actually matched sites the filter hid.
+  const activeFilters: string[] = [];
+  if (category !== "all")
+    activeFilters.push(category === "official" ? "官方" : "其他");
+  if (freeTier !== "all") activeFilters.push(freeTierLabel(freeTier));
   return (
     <>
       <div className="results-bar">
@@ -326,9 +381,9 @@ function SearchResults({
       </div>
       {hits.length === 0 ? (
         <div className="empty">
-          {category === "all"
+          {activeFilters.length === 0
             ? `没有站点包含 “${query}”。可尝试模型名或来源。`
-            : `当前「${category === "official" ? "官方" : "其他"}」分类下没有命中站点，可切换「全部」查看。`}
+            : `当前「${activeFilters.join(" + ")}」筛选下没有命中站点，可切回「全部」查看。`}
         </div>
       ) : (
         <div className="search-hits">

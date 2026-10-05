@@ -12,6 +12,8 @@ AI API 站点目录平台。用户各自维护自己的 API 站点与实时模�
 - 站点卡片总览（主页 = 首个管理员的站点）+ 详情页（完整模型清单，可按厂商分组与过滤）
 - 主页搜索：在主页目录（首个管理员的站点）范围内按**模型名**或**来源（厂商）**检索，
   也可按站点名与标签检索；不跨用户
+- 主页筛选：分类（官方 / 其他）与免费额度（ALL FREE / FREE / NO）两组筛选芯片，
+  目录列表与搜索结果同时生效
 - 主页支持按评分 / 模型数 / 名称排序（默认按评分）
 - 深色 / 浅色主题
 
@@ -123,7 +125,7 @@ lib/upstream/**       模型来源适配器：openaiCompatible / spullara / mode
 - 版本化迁移：`migrations/0001..0005`，按 version 幂等应用
 - 结构化日志（pino，自动脱敏 key）：`lib/infra/logger.ts`
 - 健康检查：`GET /api/health`
-- 测试：29 个文件 / 199 用例（`tests/`）
+- 测试：38 个文件 / 258 用例（`tests/`）
 
 ### 数据模型（迁移 0001–0005）
 
@@ -215,7 +217,7 @@ npm run typecheck    # tsc 类型检查
 npm run lint         # ESLint
 npm run format       # Prettier 格式化
 npm run format:check # 只检查格式不写入（CI 用）
-npm run test         # vitest 单元测试（29 文件 / 199 用例）
+npm run test         # vitest 单元测试（38 文件 / 258 用例）
 npm run test:watch   # vitest 监听模式
 ```
 
