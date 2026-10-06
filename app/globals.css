@@ -118,11 +118,12 @@ select {
 }
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 a:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px var(--bg),
-    0 0 0 4px var(--line-3);
+    0 0 0 4px var(--text-4);
   border-radius: 8px;
 }
 
@@ -446,6 +447,13 @@ main {
 .search-input::placeholder {
   color: var(--text-4);
 }
+/* Placeholder text must clear AA too (measured 3.97–4.46:1 with the UA
+   default #757575 on themed surfaces). --text-4 is the app's own hint token. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-4);
+  opacity: 1; /* Firefox dims placeholders by default */
+}
 .search-input:hover {
   border-color: var(--line-2);
 }
@@ -462,6 +470,9 @@ main {
 .sel {
   position: relative;
   display: inline-block;
+  /* Never wider than the field it sits in: inline-block shrink-wraps to the
+     widest option label, which overflowed narrow panels (数据迁移 at 320px). */
+  max-width: 100%;
 }
 .sel-trigger {
   width: 100%;
@@ -636,6 +647,10 @@ main {
 }
 .site-card {
   position: relative;
+  /* Own stacking context: the sheen/wash pseudo-elements below sit at
+     z-index: -1 (above the card background, below its content) — without
+     this they would paint behind the card entirely. */
+  isolation: isolate;
   display: block;
   padding: 20px;
   border-radius: var(--radius);
@@ -699,6 +714,7 @@ main {
   opacity: 0;
   transition: opacity 0.25s ease;
   pointer-events: none;
+  z-index: -1; /* above the card background, below its content */
 }
 /* moving sheen that sweeps across the card on hover */
 .site-card::before {
@@ -718,7 +734,7 @@ main {
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: none;
-  z-index: 1;
+  z-index: -1; /* was 1: keep the sheen under the content */
 }
 [data-theme="light"] .site-card::before {
   background: linear-gradient(
@@ -747,8 +763,9 @@ main {
     opacity 0.2s ease;
 }
 .card-top {
-  position: relative;
-  z-index: 2;
+  /* Deliberately NOT positioned: .card-stretch::after (the whole-card click
+     overlay) sizes against the nearest POSITIONED ancestor — with
+     position:relative here the overlay covered only this ~44px title row. */
   display: flex;
   align-items: center;
   gap: 13px;
@@ -826,8 +843,8 @@ main {
   line-height: 1.65;
 }
 .card-bottom {
-  position: relative;
-  z-index: 2;
+  /* Same as .card-top: must stay non-positioned so the stretched link's
+     overlay spans the whole card, not just the rows above it. */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -843,6 +860,8 @@ main {
 }
 /* "前往" chip on cards: an actionable link, visually distinct from static tags. */
 .card-go {
+  position: relative;
+  z-index: 1; /* above the stretched card-title link */
   color: var(--text);
   cursor: pointer;
   transition:
@@ -852,6 +871,16 @@ main {
 .card-go:hover {
   background: var(--surface-2);
   color: var(--text);
+}
+/* Stretched title link: makes the whole card clickable WITHOUT nesting the
+   「前往」 external link inside it (a>a is invalid HTML and merged both link
+   names in the accessibility tree). The link paints over the card via ::after;
+   sibling controls opt out with z-index. */
+.card-stretch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 .badge {
   padding: 5px 11px;
@@ -1007,6 +1036,16 @@ main {
   border: 1px dashed var(--line-2);
   border-radius: var(--radius);
   background: var(--surface);
+}
+/* Error/empty pages need a real heading — an empty <div> leaves the document
+   outline with no title (screen readers announce nothing). Sized modestly so
+   it doesn't compete with the page-level h1 on content pages. */
+.empty h1,
+.empty-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
 }
 .spin {
   color: var(--text-4);
@@ -1343,7 +1382,10 @@ main {
   font-size: 14px;
   transition: 0.15s ease;
 }
-.field textarea.model-textarea {
+/* Textareas carry the same theme treatment wherever they appear — the
+   comment form's textarea was UA-default (white box, black monospace text)
+   on the dark theme because the rule was scoped to `.field textarea`. */
+textarea.model-textarea {
   width: 100%;
   padding: 10px 14px;
   border-radius: 11px;
@@ -1355,10 +1397,10 @@ main {
   min-height: 96px;
   transition: 0.15s ease;
 }
-.field textarea.model-textarea:hover {
+textarea.model-textarea:hover {
   border-color: var(--line-2);
 }
-.field textarea.model-textarea:focus {
+textarea.model-textarea:focus {
   border-color: var(--line-3);
   background: var(--surface-2);
   outline: none;
@@ -1374,6 +1416,15 @@ main {
   outline: none;
 }
 .modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* Standalone form action row (e.g. the full-page provider editor): same
+   visual contract as .modal-actions so primary/secondary buttons line up. */
+.form-actions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
@@ -2189,6 +2240,17 @@ main {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* A horizontally scrollable container that holds no focusable children is
+   unreachable for keyboard users on narrow screens (the right-hand columns
+   simply cannot be scrolled to). tabindex="0" + the global focus ring makes
+   it a tab stop; browsers scroll it with the arrow keys once focused. */
+.table-scroll[tabindex]:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--text-4);
+  border-radius: 8px;
+}
 
 /* Header: on phones the actions row must stay one line; the brand shrinks
    instead of wrapping the buttons to a second row. */
@@ -2241,6 +2303,7 @@ main {
   .vendor-chip,
   .filter-chip,
   .console-drawer-toggle,
+  .console-menu-item,
   .star-btn,
   .brand,
   .back-link,
@@ -2396,7 +2459,10 @@ main {
   color: var(--text-4);
 }
 .console-menu-item.active .console-menu-icon {
-  color: var(--accent-ink, var(--text));
+  /* The active row's background is --surface (a LIGHT wash on the dark theme
+     and a near-white one on the light theme), so --accent-ink (near-black /
+     white) measured 1.03:1 there. Keep the icon in the text ramp instead. */
+  color: var(--text-2);
 }
 
 .console-menu-back {

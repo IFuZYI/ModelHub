@@ -235,6 +235,11 @@ export default function EditProviderPage({
       <ConsoleShell
         title="编辑站点"
         subtitle="修改站点信息、模型与标签。"
+        action={
+          <Link href="/console/providers" className="btn secondary">
+            ← 返回列表
+          </Link>
+        }
       >
         {() =>
           !ready ? (
@@ -371,10 +376,15 @@ export default function EditProviderPage({
               ))}
             </details>
           )}
-          {err && <div className="error-box">{err}</div>}
-          <button type="submit" className="btn" disabled={saving}>
-            {saving ? "保存中…" : "保存并抓取"}
-          </button>
+          {err && <div className="error-box" role="alert">{err}</div>}
+          <div className="form-actions">
+            <button type="submit" className="btn" disabled={saving}>
+              {saving ? "保存中…" : "保存并抓取"}
+            </button>
+            <Link href="/console/providers" className="btn secondary">
+              取消
+            </Link>
+          </div>
         </form>
           )
         }

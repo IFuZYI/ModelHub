@@ -24,7 +24,9 @@ async function runRefresh(reason: string): Promise<void> {
   }
   g.__modelhubRunning = true;
   try {
-    const count = await userProviderService.refreshAll(config.refreshConcurrency);
+    const count = await userProviderService.refreshAll(
+      config.refreshConcurrency
+    );
     logger.info({ reason, count }, "refreshAll complete");
   } catch (e) {
     logger.error({ err: String(e), reason }, "scheduled refresh error");
@@ -51,13 +53,16 @@ async function runTagHygiene(reason: string): Promise<void> {
 }
 
 /**
- * Periodic hygiene: drop provider_stats rows whose providers are all gone.
- * Derived rows are recomputed on writes, so a URL that lost its last
- * provider (delete cascade, manual edit) would otherwise stay listed on the
- *全服统计 page forever.
+ * Periodic hygiene for provider_stats: drop rows whose providers are all
+ * gone, and re-derive the live ones (healing drift from import paths that
+ * carry provider_stats as-is). A URL that lost its last provider (delete
+ * cascade, manual edit) would otherwise stay listed on the 全服统计 page
+ * forever.
  */
 async function runStatsHygiene(reason: string): Promise<void> {
   try {
+    // Drops orphaned rows AND re-derives live ones (heals drift from
+    // import paths that carry provider_stats as-is).
     const removed = await statsService.recomputeAll();
     if (removed > 0) {
       logger.info({ reason, removed }, "stats hygiene dropped stale rows");

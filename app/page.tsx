@@ -26,6 +26,35 @@ type ProviderSummary = Omit<PublicProvider, "models" | "comment_count">;
 type SortKey = "rating" | "models" | "name";
 type CategoryFilter = "all" | "official" | "other";
 
+/** Shared sort comparator for both the directory list and the search hits —
+ *  one definition so the two orders cannot drift apart. */
+function compareSites(
+  sort: SortKey,
+  a: {
+    name: string;
+    model_count: number;
+    rating: { average: number | null; count: number };
+  },
+  b: {
+    name: string;
+    model_count: number;
+    rating: { average: number | null; count: number };
+  }
+): number {
+  if (sort === "name") return a.name.localeCompare(b.name);
+  if (sort === "models") return b.model_count - a.model_count;
+  // Rating: higher average first; unrated last. Ties break by rating
+  // count, then model count, so popular well-rated sites lead.
+  const ra = a.rating.average;
+  const rb = b.rating.average;
+  if (ra === null && rb === null) return b.model_count - a.model_count;
+  if (ra === null) return 1;
+  if (rb === null) return -1;
+  if (rb !== ra) return rb - ra;
+  if (b.rating.count !== a.rating.count) return b.rating.count - a.rating.count;
+  return b.model_count - a.model_count;
+}
+
 interface SearchHit {
   id: string;
   name: string;
@@ -57,6 +86,7 @@ export default function Home() {
 
   // Homepage search state (single-owner scope: the homepage directory's owner).
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic request id: only the latest search may commit its result, so a
   // slow stale response can't overwrite a newer one (and can't clear the
@@ -85,9 +115,12 @@ export default function Home() {
   }, [runLoad]);
 
   useEffect(() => {
-    void fetchAuthStatus().then((auth) => {
-      setAuthed(auth.authenticated);
-    });
+    // Never rejects: a failed probe keeps the logged-out shape.
+    fetchAuthStatus()
+      .then((auth) => {
+        setAuthed(auth.authenticated);
+      })
+      .catch(() => setAuthed(false));
   }, []);
 
   // Initial query from the URL (?q=tag-name) so tag chips deep-link into a
@@ -106,9 +139,11 @@ export default function Home() {
     if (!q) {
       searchSeqRef.current += 1; // invalidate in-flight responses
       setHits(null);
+      setSearchFailed(false);
       return;
     }
     setHits(null); // clear old results so stale hits never render with a new query
+    setSearchFailed(false);
     const seq = ++searchSeqRef.current;
     debounceRef.current = setTimeout(async () => {
       try {
@@ -116,6 +151,9 @@ export default function Home() {
           credentials: "same-origin",
         });
         if (seq !== searchSeqRef.current) return; // stale: a newer query won
+        // A 500 must not masquerade as "no sites contain this query": the
+        // error state renders its own message instead of an empty result.
+        if (!res.ok) throw new Error("搜索失败，请稍后重试");
         const json = await res.json();
         // Re-check AFTER parsing: a newer query can start while the body is
         // being read, and committing here would render the old query's hits
@@ -125,11 +163,30 @@ export default function Home() {
       } catch {
         if (seq !== searchSeqRef.current) return;
         setHits([]);
+        setSearchFailed(true);
       }
     }, 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
+  }, [query]);
+
+  // Keep the query in the URL (?q=…) so a search survives navigation: open a
+  // result, hit Back, and the homepage restores the query (read on mount).
+  // replaceState (not push) — every keystroke must not add a history entry.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (query.trim()) url.searchParams.set("q", query);
+    else url.searchParams.delete("q");
+    // Keep the hash (e.g. #models deep links) — rebuilding from pathname +
+    // search alone would silently drop it.
+    const next = url.pathname + (url.search || "") + url.hash;
+    if (
+      next !==
+      window.location.pathname + window.location.search + window.location.hash
+    ) {
+      window.history.replaceState(null, "", next);
+    }
   }, [query]);
 
   const filtered = useMemo(() => {
@@ -142,20 +199,7 @@ export default function Home() {
       );
     });
     list = filterHitsByFreeTier(list, freeFilter);
-    list = [...list].sort((a, b) => {
-      if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "models") return b.model_count - a.model_count;
-      // Rating: higher average first; unrated last. Ties break by rating
-      // count, then model count, so popular well-rated sites lead.
-      const ra = a.rating.average;
-      const rb = b.rating.average;
-      if (ra === null && rb === null) return b.model_count - a.model_count;
-      if (ra === null) return 1;
-      if (rb === null) return -1;
-      if (rb !== ra) return rb - ra;
-      if (b.rating.count !== a.rating.count) return b.rating.count - a.rating.count;
-      return b.model_count - a.model_count;
-    });
+    list = [...list].sort((a, b) => compareSites(sort, a, b));
     return list;
   }, [providers, query, catFilter, freeFilter, sort]);
 
@@ -164,15 +208,15 @@ export default function Home() {
   // Category chips apply to search hits as well as the directory list, so the
   // 官方/其他 filter stays usable while searching (previously the chips were
   // hidden in search mode and hits were never filtered). The free-tier chips
-  // compose with them.
-  const visibleHits = useMemo(
-    () =>
-      filterHitsByFreeTier(
-        filterHitsByCategory(hits ?? [], catFilter),
-        freeFilter
-      ),
-    [hits, catFilter, freeFilter]
-  );
+  // compose with them. The sort control applies here too — it was previously
+  // inert during search (visible but with no effect on hit order).
+  const visibleHits = useMemo(() => {
+    const list = filterHitsByFreeTier(
+      filterHitsByCategory(hits ?? [], catFilter),
+      freeFilter
+    );
+    return [...list].sort((a, b) => compareSites(sort, a, b));
+  }, [hits, catFilter, freeFilter, sort]);
   // Count reflects the visible (filtered) set so "N 个站点命中" matches the
   // cards below it. The panel shows a spinner (not the bar) until hits
   // arrive, so the count is only ever read once a result set exists.
@@ -185,7 +229,6 @@ export default function Home() {
         onLogout={async () => {
           await logout();
           setAuthed(false);
-
         }}
       />
       <main className="shell">
@@ -197,8 +240,8 @@ export default function Home() {
             <span className="dim">可用的模型。</span>
           </h1>
           <p>
-            汇集官方（原生 / 中转）与其他（NewAPI / 自建）API 站点，浏览各家实时可用的模型清单。
-            支持按模型名或来源检索站点。
+            汇集官方（原生 / 中转）与其他（NewAPI / 自建）API
+            站点，浏览各家实时可用的模型清单。 支持按模型名或来源检索站点。
           </p>
           <div className="stats">
             <span className="stat">
@@ -282,6 +325,7 @@ export default function Home() {
           <SearchResults
             hits={visibleHits}
             loaded={hits !== null}
+            failed={searchFailed}
             total={filteredSearchTotal}
             query={query}
             category={catFilter}
@@ -318,7 +362,11 @@ export default function Home() {
             ) : (
               <div className="card-grid">
                 {filtered.map((p) => (
-                  <Link key={p.id} href={`/providers/${p.id}`} className="site-card">
+                  <Link
+                    key={p.id}
+                    href={`/providers/${p.id}`}
+                    className="site-card"
+                  >
                     <div className="card-top">
                       <ProviderAvatar name={p.name} icon={p.icon} />
                       <div className="card-identity">
@@ -330,7 +378,10 @@ export default function Home() {
                       <TypeBadge type={p.type} />
                       <FreeBadge tier={p.free_tier} />
                       <span className="card-tag">{p.model_count} 模型</span>
-                      <Stars average={p.rating.average} count={p.rating.count} />
+                      <Stars
+                        average={p.rating.average}
+                        count={p.rating.count}
+                      />
                       {p.aff_code && <span className="card-tag">邀请码</span>}
                     </div>
                   </Link>
@@ -347,6 +398,7 @@ export default function Home() {
 function SearchResults({
   hits,
   loaded,
+  failed,
   total,
   query,
   category,
@@ -355,6 +407,8 @@ function SearchResults({
   hits: SearchHit[];
   /** False until the first response for the current query has committed. */
   loaded: boolean;
+  /** True when the request errored — a distinct state from "no matches". */
+  failed: boolean;
   total: number;
   query: string;
   category: "all" | "official" | "other";
@@ -365,6 +419,9 @@ function SearchResults({
   // the old `hits === null` test was dead code and the panel flashed
   // 「搜索 … — 0 个站点命中」 + 「没有站点包含 …」 for the debounce+fetch window.
   if (!loaded) return <div className="spin">搜索中…</div>;
+  // A failed request is not a zero-result search: saying 「0 个站点命中」
+  // would tell the user their query matched nothing when the server errored.
+  if (failed) return <div className="empty">搜索失败，请稍后重试。</div>;
   // Explain which active filter narrowed the list to nothing; the message
   // must name every chip the user set, or "没有站点" reads as "the search
   // found nothing" when the search actually matched sites the filter hid.
@@ -430,7 +487,9 @@ function SearchResults({
                   </span>
                 ))}
                 {h.updated_at && (
-                  <span className="card-tag">更新于 {timeAgo(h.updated_at)}</span>
+                  <span className="card-tag">
+                    更新于 {timeAgo(h.updated_at)}
+                  </span>
                 )}
               </div>
             </Link>

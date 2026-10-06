@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SiteHeader from "../../components/SiteHeader";
 import ProviderAvatar from "../../components/ProviderAvatar";
 import { TypeBadge, FreeBadge, Stars } from "../../components/badges";
 import { hostOf } from "../../lib/display";
+import { fetchAuthStatus, logout as apiLogout } from "../../lib/api";
+import { usePageTitle } from "../../lib/usePageTitle";
 
 interface PublicProvider {
   id: string;
@@ -43,20 +46,45 @@ export default function PersonalPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const router = useRouter();
   const [page, setPage] = useState<PagePayload | null>(null);
+  // Title shows whose page this is once loaded (WCAG 2.4.2).
+  usePageTitle(
+    page ? `${page.owner.display_name || page.owner.username} 的分享页` : null
+  );
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [authed, setAuthed] = useState(false);
+
+  // The header must reflect the real session: a logged-in visitor previously
+  // saw a 「登录」 button here (hardcoded authenticated={false}). A failed
+  // status probe keeps the logged-out shape (safe default), never rejects.
+  useEffect(() => {
+    fetchAuthStatus()
+      .then((auth) => setAuthed(auth.authenticated))
+      .catch(() => setAuthed(false));
+  }, []);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/pages/${slug}`);
-    if (res.status === 404) {
-      setNotFound(true);
+    try {
+      const res = await fetch(`/api/pages/${slug}`);
+      if (res.status === 404) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      // A non-2xx (500, proxy error page) must not be parsed as a page
+      // payload — `owner` was undefined and the render crashed the page.
+      if (!res.ok) throw new Error("无法加载个人主页");
+      const json = await res.json();
+      setPage(json);
+      setLoadError(null);
       setLoading(false);
-      return;
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "无法加载个人主页");
+      setLoading(false);
     }
-    const json = await res.json();
-    setPage(json);
-    setLoading(false);
   }, [slug]);
 
   useEffect(() => {
@@ -66,9 +94,34 @@ export default function PersonalPage({
   if (loading)
     return (
       <>
-        <SiteHeader authenticated={false} />
+        <SiteHeader authenticated={authed} />
         <main className="shell">
           <div className="spin">加载中…</div>
+        </main>
+      </>
+    );
+
+  if (loadError)
+    return (
+      <>
+        <SiteHeader authenticated={authed} />
+        <main className="shell">
+          <div className="empty">
+            <h1 className="empty-title">加载失败</h1>
+            {loadError}
+            <div style={{ marginTop: 16 }}>
+              <button
+                className="btn secondary"
+                onClick={() => {
+                  setLoading(true);
+                  setLoadError(null);
+                  void load();
+                }}
+              >
+                重试
+              </button>
+            </div>
+          </div>
         </main>
       </>
     );
@@ -76,12 +129,15 @@ export default function PersonalPage({
   if (notFound || !page)
     return (
       <>
-        <SiteHeader authenticated={false} />
+        <SiteHeader authenticated={authed} />
         <main className="shell">
           <div className="empty">
-            页面不存在或已关闭。
+            <h1 className="empty-title">页面不存在</h1>
+            该分享页可能已被关闭。
             <div style={{ marginTop: 16 }}>
-              <Link href="/" className="btn secondary">返回首页</Link>
+              <Link href="/" className="btn secondary">
+                返回首页
+              </Link>
             </div>
           </div>
         </main>
@@ -94,7 +150,14 @@ export default function PersonalPage({
 
   return (
     <>
-      <SiteHeader authenticated={false} />
+      <SiteHeader
+        authenticated={authed}
+        onLogout={async () => {
+          await apiLogout();
+          setAuthed(false);
+          router.refresh();
+        }}
+      />
       <main className="shell">
         <section className="intro">
           <div className="eyebrow">个人分享页</div>
@@ -134,11 +197,23 @@ export default function PersonalPage({
         ) : (
           <div className="card-grid">
             {providers.map((p) => (
-              <Link key={p.id} href={`/providers/${p.id}`} className="site-card">
+              /* A card is a div, not a Link: the 「前往」 external link used to
+                 nest inside the card anchor (invalid HTML; screen readers
+                 merged the two link names). The title link is STRETCHED over
+                 the card (::after), so the whole card stays clickable while
+                 the two links remain siblings. */
+              <div key={p.id} className="site-card">
                 <div className="card-top">
                   <ProviderAvatar name={p.name} icon={p.icon} />
                   <div className="card-identity">
-                    <p className="card-title">{p.name}</p>
+                    <p className="card-title">
+                      <Link
+                        href={`/providers/${p.id}`}
+                        className="card-stretch"
+                      >
+                        {p.name}
+                      </Link>
+                    </p>
                     <div className="card-domain">{hostOf(p.base_url)}</div>
                   </div>
                   <Stars average={p.rating.average} count={p.rating.count} />
@@ -160,24 +235,21 @@ export default function PersonalPage({
                   {p.comment_count > 0 && (
                     <span className="card-tag">{p.comment_count} 评论</span>
                   )}
-                  {/* Direct link to the site itself (opens in a new tab);
-                      stopPropagation so it doesn't also trigger the card Link. */}
+                  {/* Sibling link above the stretched title link (z-index),
+                      opens the site in a new tab. */}
                   {(p.invite_url || p.base_url) && (
                     <a
                       className="card-tag card-go"
                       href={p.invite_url || p.base_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      title={
-                        p.aff_code ? "前往站点（含邀请码）" : "前往站点"
-                      }
+                      title={p.aff_code ? "前往站点（含邀请码）" : "前往站点"}
                     >
                       前往{p.aff_code ? "（含邀请码）" : ""} ↗
                     </a>
                   )}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

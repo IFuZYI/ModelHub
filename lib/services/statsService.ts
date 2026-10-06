@@ -1,11 +1,19 @@
 import { getDatabase } from "../infra/db";
 import {
   UserProviderRepository,
+  type OwnedProviderMeta,
 } from "../infra/repositories/userProviderRepo";
 import { UserRepository } from "../infra/repositories/userRepo";
-import { StatsRepository, type ProviderStat } from "../infra/repositories/statsRepo";
+import {
+  StatsRepository,
+  type ProviderStat,
+} from "../infra/repositories/statsRepo";
 import { deriveStat, type StatContribution } from "../domain/stats";
-import { normalizeBaseUrl, type ProviderType, type FreeTier } from "../domain/provider";
+import {
+  normalizeBaseUrl,
+  type ProviderType,
+  type FreeTier,
+} from "../domain/provider";
 import { AppError } from "../domain/errors";
 
 /** A stats row plus whether the admin already mounts this base_url. */
@@ -34,9 +42,16 @@ export class StatsService {
 
   /** Recompute the aggregate row for one base_url from all users' configs. */
   async recompute(normalizedBaseUrl: string): Promise<void> {
-    const matching = await this.providers.listMetaByNormalizedUrl(
-      normalizedBaseUrl
-    );
+    const matching =
+      await this.providers.listMetaByNormalizedUrl(normalizedBaseUrl);
+    await this.applyRecompute(normalizedBaseUrl, matching);
+  }
+
+  /** Shared write half of recompute(): derive + upsert (or drop when empty). */
+  private async applyRecompute(
+    normalizedBaseUrl: string,
+    matching: OwnedProviderMeta[]
+  ): Promise<void> {
     if (matching.length === 0) {
       await this.stats.remove(normalizedBaseUrl);
       return;
@@ -56,12 +71,18 @@ export class StatsService {
   }
 
   /**
-   * Sweep every stats row and drop the ones no provider mounts any more.
+   * Sweep every stats row: drop the ones no provider mounts any more, and
+   * RE-DERIVE the ones that are still live.
    *
    * The per-URL recompute is driven by writes, so it cannot see a row whose
    * URL is no longer referenced by anyone (e.g. rows left behind by deletes
    * that predate the recompute-on-delete fix, or by a manual DB edit). This
-   * heals them.
+   * heals them. Re-deriving live rows additionally heals drift introduced by
+   * paths that bypass the write-time recompute — most notably a transfer
+   * import, which carries provider_stats as-is (its admin_* columns are
+   * authored data) and would otherwise leave the aggregate table showing a
+   * stale type/free_tier forever. Admin overrides are preserved: upsertDerived
+   * layers them back on top of the derived values.
    */
   async recomputeAll(): Promise<number> {
     const rows = await this.stats.list();
@@ -73,9 +94,46 @@ export class StatsService {
       if (matching.length === 0) {
         await this.stats.remove(row.normalized_base_url);
         removed++;
+      } else {
+        // Reuse the already-loaded providers (recompute() would re-query the
+        // same URL) and skip the write when nothing actually changed, so a
+        // no-op sweep does not churn updated_at on every live row.
+        const derived = deriveStat(
+          matching.map((p) => ({
+            name: p.name,
+            icon: p.icon,
+            type: p.type,
+            free_tier: p.free_tier,
+          }))
+        );
+        if (!this.isDrifted(row, matching[0].base_url, derived)) continue;
+        await this.applyRecompute(row.normalized_base_url, matching);
       }
     }
     return removed;
+  }
+
+  /** True when the stored row disagrees with what the providers derive. */
+  private isDrifted(
+    row: ProviderStat,
+    baseUrl: string,
+    derived: ReturnType<typeof deriveStat>
+  ): boolean {
+    const eq = (a: unknown, b: unknown) =>
+      JSON.stringify(a) === JSON.stringify(b);
+    return (
+      row.base_url !== baseUrl ||
+      // The stored columns already have admin overrides layered on top, so a
+      // drifted row shows the derived value here only when no override masks
+      // it; comparing against the override-aware values avoids false positives.
+      row.name !== (row.admin_name ?? derived.name) ||
+      row.icon !== (row.admin_icon ?? derived.icon) ||
+      row.type !== (row.admin_type ?? derived.type) ||
+      row.free_tier !== (row.admin_free_tier ?? derived.free_tier) ||
+      !eq(row.type_votes, derived.type_votes) ||
+      !eq(row.free_tier_votes, derived.free_tier_votes) ||
+      row.user_count !== derived.user_count
+    );
   }
 
   /** Full-service stats list, annotated with admin-added + effective values. */
@@ -135,7 +193,8 @@ export class StatsService {
     if (override.name !== undefined) set.admin_name = override.name;
     if (override.icon !== undefined) set.admin_icon = override.icon;
     if (override.type !== undefined) set.admin_type = override.type;
-    if (override.free_tier !== undefined) set.admin_free_tier = override.free_tier;
+    if (override.free_tier !== undefined)
+      set.admin_free_tier = override.free_tier;
     if (Object.keys(set).length === 0) return;
     await db
       .updateTable("provider_stats")

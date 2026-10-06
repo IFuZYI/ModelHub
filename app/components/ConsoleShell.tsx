@@ -4,7 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import SiteHeader from "./SiteHeader";
-import { fetchAuthStatus, logout as apiLogout, type SessionUser } from "../lib/api";
+import {
+  fetchAuthStatus,
+  logout as apiLogout,
+  type SessionUser,
+} from "../lib/api";
+import { usePageTitle } from "../lib/usePageTitle";
 
 export interface ConsoleNavItem {
   href: string;
@@ -61,6 +66,10 @@ export default function ConsoleShell({
   const [avatar, setAvatar] = useState<string | null>(null);
   const [open, setOpen] = useState(false); // mobile drawer
 
+  // Page-specific document title (WCAG 2.4.2): every console page already
+  // names itself via `title`, so derive the tab title from the same source.
+  usePageTitle(title);
+
   const load = useCallback(async () => {
     const status = await fetchAuthStatus();
     setRole(status.role);
@@ -94,6 +103,16 @@ export default function ConsoleShell({
     setOpen(false);
   }, [pathname]);
 
+  // Escape closes the drawer (consistent with the app's dialogs).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   async function doLogout() {
     await apiLogout();
     router.replace("/login");
@@ -115,7 +134,8 @@ export default function ConsoleShell({
         <SiteHeader authenticated={false} />
         <main className="shell">
           <div className="empty">
-            请先登录。
+            <h1 className="empty-title">请先登录</h1>
+            登录后才能访问控制台。
             <div style={{ marginTop: 16 }}>
               <Link href="/login" className="btn secondary">
                 去登录
@@ -173,7 +193,9 @@ export default function ConsoleShell({
               <p className="console-id-name">{name}</p>
               <p className="console-id-meta">
                 @{user?.username}
-                {role === "admin" && <span className="console-role">管理员</span>}
+                {role === "admin" && (
+                  <span className="console-role">管理员</span>
+                )}
               </p>
             </div>
           </div>
@@ -206,9 +228,7 @@ export default function ConsoleShell({
           <div className="console-head">
             <div>
               <h1 className="detail-title">{title}</h1>
-              {subtitle && (
-                <p className="console-subtitle">{subtitle}</p>
-              )}
+              {subtitle && <p className="console-subtitle">{subtitle}</p>}
             </div>
             {action}
           </div>

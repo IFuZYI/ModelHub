@@ -200,7 +200,15 @@ export default function Select({
         className="sel-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
+        // role=combobox legitimizes aria-activedescendant on the trigger
+        // (it is the focused element that owns the active-option pointer).
+        role="combobox"
         aria-label={ariaLabel}
+        // The trigger keeps DOM focus while the menu is open, so the
+        // active-option pointer belongs HERE — on the focused element —
+        // not on the unfocusable <ul>. aria-controls ties the two together.
+        aria-controls={open ? listboxId : undefined}
+        aria-activedescendant={open ? `${listboxId}-opt-${active}` : undefined}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onKeyDown}
       >
@@ -213,7 +221,6 @@ export default function Select({
           className="sel-menu"
           role="listbox"
           id={listboxId}
-          aria-activedescendant={`${listboxId}-opt-${active}`}
           tabIndex={-1}
         >
           {options.map((o, i) => (

@@ -4,10 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import SiteHeader from "../components/SiteHeader";
 import { fetchAuthStatus, apiErrorMessage } from "../lib/api";
+import { usePageTitle } from "../lib/usePageTitle";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
+  // Tab title follows the mode, not just the initial page (register mode
+  // previously kept 「登录 · ModelHub」).
+  usePageTitle(mode === "login" ? "登录" : "注册");
   const [registrationEnabled, setRegistrationEnabled] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -99,7 +103,11 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              {err && <div className="auth-error">{err}</div>}
+              {err && (
+                <div className="auth-error" role="alert">
+                  {err}
+                </div>
+              )}
               <button className="btn" type="submit" disabled={busy}>
                 {busy ? "验证中…" : "完成注册"}
               </button>
@@ -124,9 +132,7 @@ export default function LoginPage() {
       <SiteHeader authenticated={false} />
       <main className="shell">
         <div className="auth-card">
-          <h1 className="auth-title">
-            {mode === "login" ? "登录" : "注册"}
-          </h1>
+          <h1 className="auth-title">{mode === "login" ? "登录" : "注册"}</h1>
           <form onSubmit={submit} className="auth-form">
             <div className="field">
               <label htmlFor="auth-username">用户名</label>
@@ -163,7 +169,11 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {err && <div className="auth-error">{err}</div>}
+            {err && (
+              <div className="auth-error" role="alert">
+                {err}
+              </div>
+            )}
             <button className="btn" type="submit" disabled={busy}>
               {busy ? "处理中…" : mode === "login" ? "登录" : "注册"}
             </button>

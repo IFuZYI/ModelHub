@@ -5,9 +5,14 @@ import Link from "next/link";
 import ConsoleShell from "../../components/ConsoleShell";
 import Select from "../../components/Select";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import ModalShell from "../../components/ModalShell";
 import { TypeBadge, StatusDot } from "../../components/badges";
 import ProviderAvatar from "../../components/ProviderAvatar";
-import { fetchAuthStatus, importNewapiSite, apiErrorMessage } from "../../lib/api";
+import {
+  fetchAuthStatus,
+  importNewapiSite,
+  apiErrorMessage,
+} from "../../lib/api";
 import { ProviderType, FreeTier } from "@/lib";
 import { OFFICIAL_PRESETS, faviconUrl } from "@/lib/domain/presets";
 import type { OfficialPreset } from "@/lib/domain/presets";
@@ -217,11 +222,18 @@ export default function AdminPage() {
   const [typeFilter, setTypeFilter] = useState<ProviderType | "all">("all");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [flow, setFlow] = useState<Flow>("menu");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  // Refresh guard: state drives the label, the ref blocks same-tick double
+  // clicks (two rapid clicks both run before React re-renders). Without it a
+  // triple-click fired three concurrent refresh+reload cycles at the upstream
+  // site, and the button gave no feedback at all.
+  const refreshingRef = useRef<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
 
   // newapi quick-import
   const [importUrl, setImportUrl] = useState("");
@@ -233,7 +245,9 @@ export default function AdminPage() {
   const [presetNote, setPresetNote] = useState<string | null>(null);
 
   const loadProviders = useCallback(async () => {
-    const res = await fetch("/api/me/providers", { credentials: "same-origin" });
+    const res = await fetch("/api/me/providers", {
+      credentials: "same-origin",
+    });
     const json = await res.json();
     setProviders(json.providers ?? []);
   }, []);
@@ -398,11 +412,20 @@ export default function AdminPage() {
   }
 
   async function refresh(id: string) {
-    await fetch(`/api/providers/${id}/refresh`, { method: "POST" });
-    await loadProviders();
+    if (refreshingRef.current.has(id)) return;
+    refreshingRef.current.add(id);
+    setRefreshing(new Set(refreshingRef.current));
+    try {
+      await fetch(`/api/providers/${id}/refresh`, { method: "POST" });
+      await loadProviders();
+    } finally {
+      refreshingRef.current.delete(id);
+      setRefreshing(new Set(refreshingRef.current));
+    }
   }
 
   async function remove(id: string) {
+    setDeleteErr(null);
     setPendingDelete(id);
   }
 
@@ -411,9 +434,15 @@ export default function AdminPage() {
     if (!id) return;
     setDeleteBusy(true);
     try {
-      await fetch(`/api/providers/${id}`, { method: "DELETE" });
-      await loadProviders();
+      const res = await fetch(`/api/providers/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setDeleteErr(apiErrorMessage(json, "删除失败"));
+        return;
+      }
       setPendingDelete(null);
+      setDeleteErr(null);
+      await loadProviders();
     } finally {
       setDeleteBusy(false);
     }
@@ -436,13 +465,17 @@ export default function AdminPage() {
           <StatusDot status={p.last_status} />
         </div>
         {p.last_error && (
-          <div className="error-box" style={{ marginBottom: 0 }}>
+          <div className="error-box" role="alert" style={{ marginBottom: 0 }}>
             {p.last_error}
           </div>
         )}
         <div className="admin-bar" style={{ marginBottom: 0 }}>
-          <button className="icon-btn" onClick={() => refresh(p.id)}>
-            刷新
+          <button
+            className="icon-btn"
+            disabled={refreshing.has(p.id)}
+            onClick={() => refresh(p.id)}
+          >
+            {refreshing.has(p.id) ? "刷新中…" : "刷新"}
           </button>
           <Link className="icon-btn" href={`/console/providers/${p.id}`}>
             编辑
@@ -477,9 +510,7 @@ export default function AdminPage() {
     for (const p of providers) byType.get(p.type)?.push(p);
 
     const shown =
-      typeFilter === "all"
-        ? providers
-        : (byType.get(typeFilter) ?? []);
+      typeFilter === "all" ? providers : (byType.get(typeFilter) ?? []);
 
     return (
       <>
@@ -521,9 +552,7 @@ export default function AdminPage() {
                 <section key={s.type} className="admin-subgroup">
                   <div className="admin-subgroup-label">
                     {s.label}
-                    <span className="admin-subgroup-count">
-                      {items.length}
-                    </span>
+                    <span className="admin-subgroup-count">{items.length}</span>
                   </div>
                   <div className="card-grid">
                     {items.map((p) => (
@@ -547,7 +576,10 @@ export default function AdminPage() {
 
   if (!ready)
     return (
-      <ConsoleShell title="我的站点" subtitle="管理你自己的站点，密钥加密存储、永不下发前台。">
+      <ConsoleShell
+        title="我的站点"
+        subtitle="管理你自己的站点，密钥加密存储、永不下发前台。"
+      >
         {() => <div className="spin">加载中…</div>}
       </ConsoleShell>
     );
@@ -580,98 +612,74 @@ export default function AdminPage() {
         title="删除这个站点？"
         body="站点配置与模型缓存将被移除，此操作无法撤销。"
         busy={deleteBusy}
+        error={deleteErr}
         onConfirm={confirmDelete}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() => {
+          setDeleteErr(null);
+          setPendingDelete(null);
+        }}
       />
 
       {showModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            {/* ---- flow: level-1 menu (官方 / 其他) ---- */}
-            {flow === "menu" && (
-              <>
-                <h2>添加提供商</h2>
-                <div className="modal-scroll">
-                  <div className="choice-grid">
-                    <button
-                      type="button"
-                      className="choice-card"
-                      onClick={() => setFlow("official")}
-                    >
-                      <span className="choice-icon">✦</span>
-                      <span className="choice-title">官方</span>
-                      <span className="choice-desc">
-                        各厂商原生 API 与中转平台，从内置列表一键选择
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="choice-card"
-                      onClick={() => setFlow("other")}
-                    >
-                      <span className="choice-icon">⇄</span>
-                      <span className="choice-title">其他</span>
-                      <span className="choice-desc">
-                        NewAPI 中转站（支持快捷导入）或自建站点
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                <div className="modal-actions">
+        <ModalShell label="添加提供商" onClose={closeModal}>
+          {/* ---- flow: level-1 menu (官方 / 其他) ---- */}
+          {flow === "menu" && (
+            <>
+              <h2>添加提供商</h2>
+              <div className="modal-scroll">
+                <div className="choice-grid">
                   <button
                     type="button"
-                    className="btn secondary"
-                    onClick={closeModal}
+                    className="choice-card"
+                    onClick={() => setFlow("official")}
                   >
-                    取消
+                    <span className="choice-icon">✦</span>
+                    <span className="choice-title">官方</span>
+                    <span className="choice-desc">
+                      各厂商原生 API 与中转平台，从内置列表一键选择
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="choice-card"
+                    onClick={() => setFlow("other")}
+                  >
+                    <span className="choice-icon">⇄</span>
+                    <span className="choice-title">其他</span>
+                    <span className="choice-desc">
+                      NewAPI 中转站（支持快捷导入）或自建站点
+                    </span>
                   </button>
                 </div>
-              </>
-            )}
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={closeModal}
+                >
+                  取消
+                </button>
+              </div>
+            </>
+          )}
 
-            {/* ---- flow: 官方 preset picker (原生 + 中转) ---- */}
-            {flow === "official" && (
-              <>
-                <h2>选择官方提供商</h2>
-                <div className="modal-scroll">
-                  {/* 原生: grouped by region */}
-                  {(["国际", "中国", "企业"] as const).map((region) => {
-                    const items = OFFICIAL_PRESETS.filter(
-                      (p) => p.type === "native" && p.region === region
-                    );
-                    if (items.length === 0) return null;
-                    return (
-                      <div key={region} className="preset-group">
-                        <div className="preset-group-label">
-                          原生 · {region}
-                        </div>
-                        <div className="preset-grid">
-                          {items.map((preset) => (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              className="preset-item"
-                              onClick={() => pickPreset(preset)}
-                              title={preset.models.join(", ")}
-                            >
-                              <ProviderAvatar
-                                name={preset.name}
-                                icon={faviconUrl(preset.domain)}
-                                className="preset-avatar"
-                              />
-                              <span className="preset-name">{preset.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* 中转 */}
-                  <div className="preset-group">
-                    <div className="preset-group-label">中转 · 聚合路由</div>
-                    <div className="preset-grid">
-                      {OFFICIAL_PRESETS.filter((p) => p.type === "proxy").map(
-                        (preset) => (
+          {/* ---- flow: 官方 preset picker (原生 + 中转) ---- */}
+          {flow === "official" && (
+            <>
+              <h2>选择官方提供商</h2>
+              <div className="modal-scroll">
+                {/* 原生: grouped by region */}
+                {(["国际", "中国", "企业"] as const).map((region) => {
+                  const items = OFFICIAL_PRESETS.filter(
+                    (p) => p.type === "native" && p.region === region
+                  );
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={region} className="preset-group">
+                      <div className="preset-group-label">原生 · {region}</div>
+                      <div className="preset-grid">
+                        {items.map((preset) => (
                           <button
                             key={preset.id}
                             type="button"
@@ -686,373 +694,426 @@ export default function AdminPage() {
                             />
                             <span className="preset-name">{preset.name}</span>
                           </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => setFlow("menu")}
-                  >
-                    ← 返回
-                  </button>
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => startBlank("native")}
-                  >
-                    手动·原生
-                  </button>
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => startBlank("proxy")}
-                  >
-                    手动·中转
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ---- flow: 其他 sub-menu (NewAPI / 自建) ---- */}
-            {flow === "other" && (
-              <>
-                <h2>其他提供商</h2>
-                <div className="modal-scroll">
-                  <div className="choice-grid">
-                    <button
-                      type="button"
-                      className="choice-card"
-                      onClick={() => {
-                        setImportUrl("");
-                        setImportErr(null);
-                        setFlow("newapi");
-                      }}
-                    >
-                      <span className="choice-icon">🔗</span>
-                      <span className="choice-title">NewAPI</span>
-                      <span className="choice-desc">
-                        粘贴站点链接快捷导入，或手动填表
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="choice-card"
-                      onClick={() => startBlank("custom")}
-                    >
-                      <span className="choice-icon">⚙</span>
-                      <span className="choice-title">其他 / 自建</span>
-                      <span className="choice-desc">
-                        任意 OpenAI 兼容站点，手动填写
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => setFlow("menu")}
-                  >
-                    ← 返回
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ---- flow: NewAPI quick-import ---- */}
-            {flow === "newapi" && (
-              <>
-                <h2>NewAPI 快捷导入</h2>
-                <div className="modal-scroll">
-                  <form id="newapi-import-form" onSubmit={runImport}>
-                    <div className="field">
-                      <label htmlFor="providers-840">站点链接（首页 / 注册链接 / 含 ?aff= 均可）</label>
-                      <input id="providers-840"
-                        value={importUrl}
-                        onChange={(e) => setImportUrl(e.target.value)}
-                        placeholder="https://api.example.top/sign-up?aff=XXXX"
-                        autoFocus
-                        required
-                      />
-                    </div>
-                    <p className="field-hint">
-                      将读取 <code>站点/api/status</code> 的{" "}
-                      <code>system_name</code> 作为名称、<code>logo</code>{" "}
-                      作为图标，并从 <code>?aff=</code> 解析邀请码。
-                    </p>
-                    {importErr && <div className="error-box">{importErr}</div>}
-                  </form>
-                </div>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => setFlow("other")}
-                  >
-                    ← 返回
-                  </button>
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => startBlank("newapi")}
-                  >
-                    手动填写
-                  </button>
-                  <button
-                    type="submit"
-                    form="newapi-import-form"
-                    className="btn"
-                    disabled={importing}
-                  >
-                    {importing ? "解析中…" : "解析并继续"}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ---- flow: the actual form (create) ---- */}
-            {flow === "form" && (
-              <>
-                <h2>
-                  {form.type === "native"
-                    ? "添加官方·原生 API"
-                    : form.type === "proxy"
-                      ? "添加官方·中转"
-                      : form.type === "newapi"
-                        ? "添加 NewAPI 站点"
-                        : "添加其他 / 自建"}
-                </h2>
-                <div className="modal-scroll">
-                  <form id="provider-form" onSubmit={submitForm}>
-                    {importNote && <div className="note-box">{importNote}</div>}
-                    {presetNote && <div className="note-box">{presetNote}</div>}
-                    {form.register_methods.length > 0 && (
-                      <div className="note-box">
-                        支持的注册方式：
-                        <div className="reg-methods">
-                          {form.register_methods.map((m) => (
-                            <span key={m} className="reg-chip">
-                              {m}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {form.models.length > 0 && (
-                      <div className="note-box">
-                        已内置 {form.models.length} 个模型
-                        {form.manual_models
-                          ? "（该厂商无模型列表接口，将始终使用内置列表）"
-                          : "（作为初始列表，抓取成功后会自动更新）"}
-                        ：
-                        <div className="seed-models">
-                          {form.models.map((m) => (
-                            <span key={m} className="seed-model">
-                              {m}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="field">
-                      <label htmlFor="providers-931">名称</label>
-                      <input id="providers-931"
-                        value={form.name}
-                        onChange={(e) =>
-                          setForm({ ...form, name: e.target.value })
-                        }
-                        placeholder="My OpenAI"
-                        required
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="provider-icon-new">
-                        图标 icon（可选，emoji 或图标 URL；留空用名称首字母）
-                      </label>
-                      <div className="icon-field">
-                        <ProviderAvatar
-                          name={form.name || "?"}
-                          icon={form.icon}
-                          className="icon-preview"
-                        />
-                        <input
-                          id="provider-icon-new"
-                          value={form.icon}
-                          onChange={(e) =>
-                            setForm({ ...form, icon: e.target.value })
-                          }
-                          placeholder="🟢 或 https://.../favicon.ico"
-                          maxLength={300}
-                        />
+                        ))}
                       </div>
                     </div>
-                    {/* FREE flag; the type was chosen in the flow above. */}
-                    <div className="field-row">
-                      {/* Free-tier grade: 三档单选 ALL FREE / FREE / NO. */}
-                      <div className="field">
-                        <label htmlFor="providers-984">免费额度</label>
-                        <Select id="providers-984"
-                          ariaLabel="免费额度分级"
-                          value={form.free_tier}
-                          onChange={(v) =>
-                            setForm({ ...form, free_tier: v as FreeTier })
-                          }
-                          options={[
-                            { value: "none", label: "NO（付费）" },
-                            { value: "free", label: "FREE（有免费额度）" },
-                            { value: "full", label: "ALL FREE（完全免费）" },
-                          ]}
-                        />
-                      </div>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="providers-1000">官网地址</label>
-                      <input id="providers-1000"
-                        value={form.base_url}
-                        onChange={(e) =>
-                          setForm({ ...form, base_url: e.target.value })
-                        }
-                        placeholder="https://openai.com"
-                        required
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="providers-1011">描述（可选）</label>
-                      <textarea id="providers-1011"
-                        className="model-textarea"
-                        value={form.description}
-                        onChange={(e) =>
-                          setForm({ ...form, description: e.target.value })
-                        }
-                        placeholder="一句话介绍这个提供商，展示在详情页。"
-                        rows={2}
-                      />
-                    </div>
-                    {form.type === "newapi" && (
-                      <FormSection
-                        title="邀请码 aff"
-                        defaultOpen={Boolean(form.aff_code)}
-                      >
-                        <div className="field">
-                          <label htmlFor="providers-1028">邀请码 aff（可选）</label>
-                          <input id="providers-1028"
-                            value={form.aff_code}
-                            onChange={(e) =>
-                              setForm({ ...form, aff_code: e.target.value })
-                            }
-                            placeholder="留空不拼邀请码；填 RANDOM 从平台邀请码池随机抽取"
+                  );
+                })}
+                {/* 中转 */}
+                <div className="preset-group">
+                  <div className="preset-group-label">中转 · 聚合路由</div>
+                  <div className="preset-grid">
+                    {OFFICIAL_PRESETS.filter((p) => p.type === "proxy").map(
+                      (preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className="preset-item"
+                          onClick={() => pickPreset(preset)}
+                          title={preset.models.join(", ")}
+                        >
+                          <ProviderAvatar
+                            name={preset.name}
+                            icon={faviconUrl(preset.domain)}
+                            className="preset-avatar"
                           />
-                          <p className="field-hint">
-                            填 <code>RANDOM</code>{" "}
-                            表示每次展示时从平台邀请码池随机取一个。
-                          </p>
-                        </div>
-                      </FormSection>
+                          <span className="preset-name">{preset.name}</span>
+                        </button>
+                      )
                     )}
-                    {(form.type === "custom" || form.type === "newapi") && (
-                      <FormSection
-                        title="自定义模型（每行一个）"
-                        defaultOpen={
-                          form.manual_models || form.models.length > 0
+                  </div>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setFlow("menu")}
+                >
+                  ← 返回
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => startBlank("native")}
+                >
+                  手动·原生
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => startBlank("proxy")}
+                >
+                  手动·中转
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ---- flow: 其他 sub-menu (NewAPI / 自建) ---- */}
+          {flow === "other" && (
+            <>
+              <h2>其他提供商</h2>
+              <div className="modal-scroll">
+                <div className="choice-grid">
+                  <button
+                    type="button"
+                    className="choice-card"
+                    onClick={() => {
+                      setImportUrl("");
+                      setImportErr(null);
+                      setFlow("newapi");
+                    }}
+                  >
+                    <span className="choice-icon">🔗</span>
+                    <span className="choice-title">NewAPI</span>
+                    <span className="choice-desc">
+                      粘贴站点链接快捷导入，或手动填表
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="choice-card"
+                    onClick={() => startBlank("custom")}
+                  >
+                    <span className="choice-icon">⚙</span>
+                    <span className="choice-title">其他 / 自建</span>
+                    <span className="choice-desc">
+                      任意 OpenAI 兼容站点，手动填写
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setFlow("menu")}
+                >
+                  ← 返回
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ---- flow: NewAPI quick-import ---- */}
+          {flow === "newapi" && (
+            <>
+              <h2>NewAPI 快捷导入</h2>
+              <div className="modal-scroll">
+                <form id="newapi-import-form" onSubmit={runImport}>
+                  <div className="field">
+                    <label htmlFor="providers-840">
+                      站点链接（首页 / 注册链接 / 含 ?aff= 均可）
+                    </label>
+                    <input
+                      id="providers-840"
+                      value={importUrl}
+                      onChange={(e) => setImportUrl(e.target.value)}
+                      placeholder="https://api.example.top/sign-up?aff=XXXX"
+                      autoFocus
+                      required
+                    />
+                  </div>
+                  <p className="field-hint">
+                    将读取 <code>站点/api/status</code> 的{" "}
+                    <code>system_name</code> 作为名称、<code>logo</code>{" "}
+                    作为图标，并从 <code>?aff=</code> 解析邀请码。
+                  </p>
+                  {importErr && (
+                    <div className="error-box" role="alert">
+                      {importErr}
+                    </div>
+                  )}
+                </form>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setFlow("other")}
+                >
+                  ← 返回
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => startBlank("newapi")}
+                >
+                  手动填写
+                </button>
+                <button
+                  type="submit"
+                  form="newapi-import-form"
+                  className="btn"
+                  disabled={importing}
+                >
+                  {importing ? "解析中…" : "解析并继续"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ---- flow: the actual form (create) ---- */}
+          {flow === "form" && (
+            <>
+              <h2>
+                {form.type === "native"
+                  ? "添加官方·原生 API"
+                  : form.type === "proxy"
+                    ? "添加官方·中转"
+                    : form.type === "newapi"
+                      ? "添加 NewAPI 站点"
+                      : "添加其他 / 自建"}
+              </h2>
+              <div className="modal-scroll">
+                <form id="provider-form" onSubmit={submitForm}>
+                  {importNote && (
+                    <div className="note-box" role="status">
+                      {importNote}
+                    </div>
+                  )}
+                  {presetNote && (
+                    <div className="note-box" role="status">
+                      {presetNote}
+                    </div>
+                  )}
+                  {form.register_methods.length > 0 && (
+                    <div className="note-box" role="status">
+                      支持的注册方式：
+                      <div className="reg-methods">
+                        {form.register_methods.map((m) => (
+                          <span key={m} className="reg-chip">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {form.models.length > 0 && (
+                    // Plain text, not role="status": this count changes while
+                    // the user types in the model textarea, and a live region
+                    // would re-announce on every keystroke.
+                    <div className="note-box">
+                      已内置 {form.models.length} 个模型
+                      {form.manual_models
+                        ? "（该厂商无模型列表接口，将始终使用内置列表）"
+                        : "（作为初始列表，抓取成功后会自动更新）"}
+                      ：
+                      <div className="seed-models">
+                        {form.models.map((m) => (
+                          <span key={m} className="seed-model">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="field">
+                    <label htmlFor="providers-931">名称</label>
+                    <input
+                      id="providers-931"
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm({ ...form, name: e.target.value })
+                      }
+                      placeholder="My OpenAI"
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="provider-icon-new">
+                      图标 icon（可选，emoji 或图标 URL；留空用名称首字母）
+                    </label>
+                    <div className="icon-field">
+                      <ProviderAvatar
+                        name={form.name || "?"}
+                        icon={form.icon}
+                        className="icon-preview"
+                      />
+                      <input
+                        id="provider-icon-new"
+                        value={form.icon}
+                        onChange={(e) =>
+                          setForm({ ...form, icon: e.target.value })
                         }
-                      >
-                        <div className="field">
-                          <label htmlFor="providers-1051">自定义模型（可选，每行一个）</label>
-                          <textarea id="providers-1051"
-                            className="model-textarea"
-                            value={form.models.join("\n")}
-                            onChange={(e) => {
-                              const list = e.target.value
-                                .split("\n")
-                                .map((s) => s.trim())
-                                .filter(Boolean);
+                        placeholder="🟢 或 https://.../favicon.ico"
+                        maxLength={300}
+                      />
+                    </div>
+                  </div>
+                  {/* FREE flag; the type was chosen in the flow above. */}
+                  <div className="field-row">
+                    {/* Free-tier grade: 三档单选 ALL FREE / FREE / NO. */}
+                    <div className="field">
+                      <label htmlFor="providers-984">免费额度</label>
+                      <Select
+                        id="providers-984"
+                        ariaLabel="免费额度分级"
+                        value={form.free_tier}
+                        onChange={(v) =>
+                          setForm({ ...form, free_tier: v as FreeTier })
+                        }
+                        options={[
+                          { value: "none", label: "NO（付费）" },
+                          { value: "free", label: "FREE（有免费额度）" },
+                          { value: "full", label: "ALL FREE（完全免费）" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="providers-1000">官网地址</label>
+                    <input
+                      id="providers-1000"
+                      value={form.base_url}
+                      onChange={(e) =>
+                        setForm({ ...form, base_url: e.target.value })
+                      }
+                      placeholder="https://openai.com"
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="providers-1011">描述（可选）</label>
+                    <textarea
+                      id="providers-1011"
+                      className="model-textarea"
+                      value={form.description}
+                      onChange={(e) =>
+                        setForm({ ...form, description: e.target.value })
+                      }
+                      placeholder="一句话介绍这个提供商，展示在详情页。"
+                      rows={2}
+                    />
+                  </div>
+                  {form.type === "newapi" && (
+                    <FormSection
+                      title="邀请码 aff"
+                      defaultOpen={Boolean(form.aff_code)}
+                    >
+                      <div className="field">
+                        <label htmlFor="providers-1028">
+                          邀请码 aff（可选）
+                        </label>
+                        <input
+                          id="providers-1028"
+                          value={form.aff_code}
+                          onChange={(e) =>
+                            setForm({ ...form, aff_code: e.target.value })
+                          }
+                          placeholder="留空不拼邀请码；填 RANDOM 从平台邀请码池随机抽取"
+                        />
+                        <p className="field-hint">
+                          填 <code>RANDOM</code>{" "}
+                          表示每次展示时从平台邀请码池随机取一个。
+                        </p>
+                      </div>
+                    </FormSection>
+                  )}
+                  {(form.type === "custom" || form.type === "newapi") && (
+                    <FormSection
+                      title="自定义模型（每行一个）"
+                      defaultOpen={form.manual_models || form.models.length > 0}
+                    >
+                      <div className="field">
+                        <label htmlFor="providers-1051">
+                          自定义模型（可选，每行一个）
+                        </label>
+                        <textarea
+                          id="providers-1051"
+                          className="model-textarea"
+                          value={form.models.join("\n")}
+                          onChange={(e) => {
+                            const list = e.target.value
+                              .split("\n")
+                              .map((s) => s.trim())
+                              .filter(Boolean);
+                            setForm({
+                              ...form,
+                              models: list,
+                              manual_models: list.length > 0,
+                            });
+                          }}
+                          placeholder={"每行一个模型名称"}
+                          rows={4}
+                        />
+                      </div>
+                    </FormSection>
+                  )}
+                  <FormSection title="标签" defaultOpen={form.tags.length > 0}>
+                    <TagsField
+                      tags={form.tags}
+                      onChange={(tags) => setForm({ ...form, tags })}
+                    />
+                  </FormSection>
+                  {/* Advanced settings (API Key + model sync sources), always
+                        collapsed by default. Field docs: docs/PROVIDER_FORM.md. */}
+                  <FormSection title="高级设置（API Key、模型同步来源）">
+                    <div className="field">
+                      <label htmlFor="providers-1086">
+                        API Key{form.type === "newapi" ? "（可选）" : ""}
+                      </label>
+                      <input
+                        id="providers-1086"
+                        type="password"
+                        value={form.key}
+                        onChange={(e) =>
+                          setForm({ ...form, key: e.target.value })
+                        }
+                        placeholder="sk-...（可留空）"
+                      />
+                    </div>
+                    {(form.type === "native" || form.type === "proxy") &&
+                      CATALOG_SLUG_FIELDS.map((f) => (
+                        <div className="field" key={f.id}>
+                          <label htmlFor={`catalog-${f.id}`}>{f.label}</label>
+                          <input
+                            id={`catalog-${f.id}`}
+                            value={form.catalog_slugs[f.id] ?? ""}
+                            onChange={(e) =>
                               setForm({
                                 ...form,
-                                models: list,
-                                manual_models: list.length > 0,
-                              });
-                            }}
-                            placeholder={"每行一个模型名称"}
-                            rows={4}
+                                catalog_slugs: {
+                                  ...form.catalog_slugs,
+                                  [f.id]: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder={f.placeholder}
                           />
                         </div>
-                      </FormSection>
-                    )}
-                    <FormSection
-                      title="标签"
-                      defaultOpen={form.tags.length > 0}
-                    >
-                      <TagsField
-                        tags={form.tags}
-                        onChange={(tags) => setForm({ ...form, tags })}
-                      />
-                    </FormSection>
-                    {/* Advanced settings (API Key + model sync sources), always
-                        collapsed by default. Field docs: docs/PROVIDER_FORM.md. */}
-                    <FormSection title="高级设置（API Key、模型同步来源）">
-                      <div className="field">
-                        <label htmlFor="providers-1086">
-                          API Key{form.type === "newapi" ? "（可选）" : ""}
-                        </label>
-                        <input id="providers-1086"
-                          type="password"
-                          value={form.key}
-                          onChange={(e) =>
-                            setForm({ ...form, key: e.target.value })
-                          }
-                          placeholder="sk-...（可留空）"
-                        />
-                      </div>
-                      {(form.type === "native" || form.type === "proxy") &&
-                        CATALOG_SLUG_FIELDS.map((f) => (
-                          <div className="field" key={f.id}>
-                            <label htmlFor={`catalog-${f.id}`}>{f.label}</label>
-                            <input id={`catalog-${f.id}`}
-                              value={form.catalog_slugs[f.id] ?? ""}
-                              onChange={(e) =>
-                                setForm({
-                                  ...form,
-                                  catalog_slugs: {
-                                    ...form.catalog_slugs,
-                                    [f.id]: e.target.value,
-                                  },
-                                })
-                              }
-                              placeholder={f.placeholder}
-                            />
-                          </div>
-                        ))}
-                    </FormSection>
-                    {formErr && <div className="error-box">{formErr}</div>}
-                  </form>
-                </div>
-                {/* Footer lives outside the scroll area and submits the form
+                      ))}
+                  </FormSection>
+                  {formErr && (
+                    <div className="error-box" role="alert">
+                      {formErr}
+                    </div>
+                  )}
+                </form>
+              </div>
+              {/* Footer lives outside the scroll area and submits the form
                     via its id, so 保存并抓取 stays reachable on any height. */}
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => setFlow(backFlowForType(form.type))}
-                  >
-                    ← 返回
-                  </button>
-                  <button
-                    type="submit"
-                    form="provider-form"
-                    className="btn"
-                    disabled={submitting}
-                  >
-                    {submitting ? "保存中…" : "保存并抓取"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setFlow(backFlowForType(form.type))}
+                >
+                  ← 返回
+                </button>
+                <button
+                  type="submit"
+                  form="provider-form"
+                  className="btn"
+                  disabled={submitting}
+                >
+                  {submitting ? "保存中…" : "保存并抓取"}
+                </button>
+              </div>
+            </>
+          )}
+        </ModalShell>
       )}
     </>
   );

@@ -117,4 +117,55 @@ describe("StatsService.recomputeAll", () => {
     expect(all).toHaveLength(1);
     expect(all[0].normalized_base_url).toBe("https://a.example.com");
   });
+
+  it("heals a live row whose derived fields drifted from the providers", async () => {
+    const db = await freshDb();
+    const { providers, stats, svc } = wire(db);
+    await seedUser(db, "u-1");
+
+    // The user's provider says: newapi + full (ALL FREE).
+    await providers.upsert({
+      ...owned("p-1", "u-1", "https://drift.example.com"),
+      free_tier: "full",
+    });
+    await svc.recompute("https://drift.example.com");
+
+    // …but the stats row was overwritten with stale values (e.g. carried
+    // as-is by a transfer import of an older server's data). The sweep must
+    // re-derive from the providers instead of leaving the drift forever.
+    await stats.upsertDerived({
+      normalized_base_url: "https://drift.example.com",
+      base_url: "https://drift.example.com",
+      name: "Old Name",
+      icon: null,
+      type: "native",
+      free_tier: "none",
+      type_votes: { native: 1 },
+      free_tier_votes: { none: 1 },
+      user_count: 1,
+    });
+
+    await svc.recomputeAll();
+
+    const healed = await stats.get("https://drift.example.com");
+    expect(healed?.type).toBe("newapi");
+    expect(healed?.free_tier).toBe("full"); // provider's own free_tier is full
+  });
+
+  it("does not touch updated_at when a sweep finds nothing drifted", async () => {
+    const db = await freshDb();
+    const { providers, stats, svc } = wire(db);
+    await seedUser(db, "u-1");
+    await providers.upsert(owned("p-1", "u-1", "https://clean.example.com"));
+    await svc.recompute("https://clean.example.com");
+
+    const before = (await stats.get("https://clean.example.com"))?.updated_at;
+    // A little wall time so a rewrite would land on a new millisecond.
+    await new Promise((r) => setTimeout(r, 10));
+    await svc.recomputeAll();
+    const after = (await stats.get("https://clean.example.com"))?.updated_at;
+
+    // updated_at is a change marker: a no-op sweep must not churn it.
+    expect(after).toBe(before);
+  });
 });

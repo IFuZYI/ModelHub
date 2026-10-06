@@ -2,12 +2,20 @@
 
 import { use, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SiteHeader from "../../components/SiteHeader";
 import ProviderAvatar from "../../components/ProviderAvatar";
-import { TypeBadge, FreeBadge, Stars, StarPicker } from "../../components/badges";
+import {
+  TypeBadge,
+  FreeBadge,
+  Stars,
+  StarPicker,
+} from "../../components/badges";
 import { modelVendor, vendorLabel, timeAgo } from "../../lib/display";
+import { usePageTitle } from "../../lib/usePageTitle";
 import {
   fetchAuthStatus,
+  logout as apiLogout,
   rateProvider,
   unrateProvider,
   postComment,
@@ -27,9 +35,13 @@ export default function ProviderDetail({
 }) {
   const { id } = use(params);
   const [p, setP] = useState<DetailPayload | null>(null);
+  // Document title reflects the site name once loaded (WCAG 2.4.2).
+  usePageTitle(p?.name);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [vendor, setVendor] = useState<string>("all");
 
@@ -45,18 +57,29 @@ export default function ProviderDetail({
   const [socialErr, setSocialErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [res, auth] = await Promise.all([
-      fetch(`/api/providers/${id}`),
-      fetchAuthStatus(),
-    ]);
-    if (res.status === 404) {
-      setNotFound(true);
+    try {
+      const [res, auth] = await Promise.all([
+        fetch(`/api/providers/${id}`),
+        fetchAuthStatus(),
+      ]);
+      if (res.status === 404) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      // Any other non-2xx (500, network proxy error page) must NOT be parsed
+      // as a provider payload — doing so left `p` without `rating` and the
+      // render crashed the whole page. Surface the same retryable error the
+      // homepage shows instead.
+      if (!res.ok) throw new Error("无法加载站点信息");
+      setP(await res.json());
+      setAuthed(auth.authenticated);
+      setLoadError(null);
       setLoading(false);
-      return;
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "无法加载站点信息");
+      setLoading(false);
     }
-    setP(await res.json());
-    setAuthed(auth.authenticated);
-    setLoading(false);
   }, [id]);
 
   useEffect(() => {
@@ -163,7 +186,7 @@ export default function ProviderDetail({
   }
 
   // Group models by vendor for the category filter + sectioned list.
-  const { vendors, grouped, filteredCount } = useMemo(() => {
+  const { vendors, grouped, filteredCount, matchedCount } = useMemo(() => {
     const models = p?.models ?? [];
     const q = query.trim().toLowerCase();
     const matched = q
@@ -186,6 +209,12 @@ export default function ProviderDetail({
         if (b.key === "其他") return -1;
         return b.count - a.count;
       });
+    // Keep the ACTIVE vendor chip in the row even when the search filter
+    // leaves it with zero matches — otherwise the chip the user selected
+    // vanishes from the list while still being the active filter.
+    if (vendor !== "all" && !vendorList.some((v) => v.key === vendor)) {
+      vendorList.push({ key: vendor, count: 0 });
+    }
 
     // Which vendors to render, honoring the active filter.
     const visible =
@@ -199,10 +228,17 @@ export default function ProviderDetail({
       models: (byVendor.get(key) ?? []).slice().sort(),
     }));
 
+    // Count of models ACTUALLY rendered after both filters — the results bar
+    // used to report the search-only count (「匹配 14」 while 11 rendered).
+    const visibleCount = groups.reduce((n, g) => n + g.models.length, 0);
+
     return {
       vendors: vendorList,
       grouped: groups,
-      filteredCount: matched.length,
+      /** Search-filtered total; the 「全部」 chip shows this. */
+      matchedCount: matched.length,
+      /** Rendered count (search + vendor); the results bar shows this. */
+      filteredCount: visibleCount,
     };
   }, [p, query, vendor]);
 
@@ -222,7 +258,8 @@ export default function ProviderDetail({
         <SiteHeader authenticated={authed} />
         <main className="shell">
           <div className="empty">
-            站点不存在。
+            <h1 className="empty-title">站点不存在</h1>
+            你访问的站点可能已被移除。
             <div style={{ marginTop: 16 }}>
               <Link href="/" className="btn secondary">
                 返回首页
@@ -233,11 +270,43 @@ export default function ProviderDetail({
       </>
     );
 
+  if (loadError)
+    return (
+      <>
+        <SiteHeader authenticated={authed} />
+        <main className="shell">
+          <div className="empty">
+            <h1 className="empty-title">加载失败</h1>
+            {loadError}
+            <div style={{ marginTop: 16 }}>
+              <button
+                className="btn secondary"
+                onClick={() => {
+                  setLoading(true);
+                  setLoadError(null);
+                  void load();
+                }}
+              >
+                重试
+              </button>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+
   if (!p) return null;
 
   return (
     <>
-      <SiteHeader authenticated={authed} />
+      <SiteHeader
+        authenticated={authed}
+        onLogout={async () => {
+          await apiLogout();
+          setAuthed(false);
+          router.refresh();
+        }}
+      />
       <main className="shell">
         <div style={{ paddingTop: 40 }}>
           <Link href="/" className="back-link">
@@ -257,7 +326,11 @@ export default function ProviderDetail({
             </p>
             {p.description && <p className="detail-desc">{p.description}</p>}
             <div className="detail-meta">
-              <Stars average={p.rating.average} count={p.rating.count} size={16} />
+              <Stars
+                average={p.rating.average}
+                count={p.rating.count}
+                size={16}
+              />
               <span className="card-tag">{p.comment_count} 评论</span>
               {p.author?.slug && (
                 <Link href={`/p/${p.author.slug}`} className="back-link">
@@ -306,7 +379,11 @@ export default function ProviderDetail({
         <section className="panel social-panel">
           <h2 className="panel-title">评分</h2>
           <div className="rating-row">
-            <Stars average={p.rating.average} count={p.rating.count} size={20} />
+            <Stars
+              average={p.rating.average}
+              count={p.rating.count}
+              size={20}
+            />
             <span className="card-domain">
               {p.rating.average === null
                 ? "暂无评分"
@@ -335,11 +412,11 @@ export default function ProviderDetail({
             <div className="card-domain">
               <Link href="/login" className="back-link">
                 登录
-              </Link>
-              {" "}后可评分与评论。
+              </Link>{" "}
+              后可评分与评论。
             </div>
           )}
-          {socialErr && <div className="error-box">{socialErr}</div>}
+          {socialErr && <div className="error-box" role="alert">{socialErr}</div>}
         </section>
 
         {/* ---- comments ---- */}
@@ -368,8 +445,8 @@ export default function ProviderDetail({
             <div className="card-domain">
               <Link href="/login" className="back-link">
                 登录
-              </Link>
-              {" "}后可评论。
+              </Link>{" "}
+              后可评论。
             </div>
           )}
           {p.comments.length === 0 ? (
@@ -382,7 +459,9 @@ export default function ProviderDetail({
                 <li key={c.id} className="comment-item">
                   <div className="comment-head">
                     <span className="comment-author">@{c.username}</span>
-                    <span className="comment-time">{timeAgo(c.created_at)}</span>
+                    <span className="comment-time">
+                      {timeAgo(c.created_at)}
+                    </span>
                     {c.mine && (
                       <button
                         className="icon-btn"
@@ -425,20 +504,25 @@ export default function ProviderDetail({
               onChange={(e) => setQuery(e.target.value)}
             />
 
-            {/* Vendor category chips (newapi-style). */}
-            {vendors.length > 1 && (
+            {/* Vendor category chips (newapi-style). Kept visible while a
+                vendor filter is active even if only one vendor remains after
+                the search filter — otherwise an empty intersection hid the
+                whole row and the user could not clear the filter. */}
+            {(vendors.length > 1 || vendor !== "all") && (
               <div className="vendor-filter">
                 <button
                   className={`vendor-chip ${vendor === "all" ? "active" : ""}`}
+                  aria-pressed={vendor === "all"}
                   onClick={() => setVendor("all")}
                 >
                   全部
-                  <span className="vendor-chip-count">{filteredCount}</span>
+                  <span className="vendor-chip-count">{matchedCount}</span>
                 </button>
                 {vendors.map((v) => (
                   <button
                     key={v.key}
                     className={`vendor-chip ${vendor === v.key ? "active" : ""}`}
+                    aria-pressed={vendor === v.key}
                     onClick={() => setVendor(v.key)}
                   >
                     {vendorLabel(v.key)}
@@ -449,7 +533,11 @@ export default function ProviderDetail({
             )}
 
             {filteredCount === 0 ? (
-              <div className="empty">没有匹配的模型。</div>
+              <div className="empty">
+                {vendor !== "all"
+                  ? "当前厂商筛选下没有匹配的模型，可切回「全部」查看。"
+                  : "没有匹配的模型。"}
+              </div>
             ) : (
               grouped.map((g) => (
                 <section key={g.key} className="model-group">

@@ -37,17 +37,32 @@ export default function SiteHeader({ authenticated, onLogout }: Props) {
           </button>
           {authenticated ? (
             <>
-              <Link href="/console" className="icon-btn" title="控制台">
+              <Link
+                href="/console"
+                className="icon-btn"
+                aria-label="控制台"
+                title="控制台"
+              >
                 ▤<span className="btn-label"> 控制台</span>
               </Link>
               {onLogout && (
-                <button className="icon-btn" onClick={onLogout} title="退出登录">
+                <button
+                  className="icon-btn"
+                  onClick={onLogout}
+                  aria-label="退出登录"
+                  title="退出登录"
+                >
                   ⏻<span className="btn-label"> 退出</span>
                 </button>
               )}
             </>
           ) : (
-            <Link href="/login" className="icon-btn" title="登录">
+            <Link
+              href="/login"
+              className="icon-btn"
+              aria-label="登录"
+              title="登录"
+            >
               ⇢<span className="btn-label"> 登录</span>
             </Link>
           )}

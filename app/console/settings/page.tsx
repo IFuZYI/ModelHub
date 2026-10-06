@@ -58,7 +58,16 @@ export default function AdminSettingsPage() {
 
   // ---- invite-code pool ----
   const [pools, setPools] = useState<
-    { normalized_base_url: string; base_url: string; codes: { code: string; source: string; id: string | null; label: string | null }[] }[]
+    {
+      normalized_base_url: string;
+      base_url: string;
+      codes: {
+        code: string;
+        source: string;
+        id: string | null;
+        label: string | null;
+      }[];
+    }[]
   >([]);
   const [newCodeUrl, setNewCodeUrl] = useState("");
   const [newCodeValue, setNewCodeValue] = useState("");
@@ -126,7 +135,9 @@ export default function AdminSettingsPage() {
   }
 
   const loadCounts = useCallback(async () => {
-    const res = await fetch("/api/admin/transfer", { credentials: "same-origin" });
+    const res = await fetch("/api/admin/transfer", {
+      credentials: "same-origin",
+    });
     if (!res.ok) return;
     const json = await res.json();
     setCounts(json.counts ?? null);
@@ -208,7 +219,9 @@ export default function AdminSettingsPage() {
       return;
     }
     setAllowed(true);
-    const res = await fetch("/api/admin/settings", { credentials: "same-origin" });
+    const res = await fetch("/api/admin/settings", {
+      credentials: "same-origin",
+    });
     const json: Settings = await res.json();
     setS(json);
     setWhitelist(json.email_domain_whitelist.join(", "));
@@ -277,302 +290,374 @@ export default function AdminSettingsPage() {
           ) : !allowed || !s ? (
             <div className="empty">需要管理员权限。</div>
           ) : (
-            <form onSubmit={save} className="settings-form">
-              <section className="panel">
-                <h2 className="panel-title">注册</h2>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={s.registration_enabled}
-                    onChange={(e) => update("registration_enabled", e.target.checked)}
-              />
-              允许自助注册
-            </label>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={s.email_verification_required}
-                onChange={(e) => update("email_verification_required", e.target.checked)}
-              />
-              注册需要邮箱验证
-            </label>
-            <div className="field">
-              <label htmlFor="settings-297">邮箱域名白名单（逗号分隔，留空不限制）</label>
-              <input id="settings-297"
-                value={whitelist}
-                onChange={(e) => setWhitelist(e.target.value)}
-                placeholder="example.com, company.org"
-              />
-            </div>
-          </section>
+            <>
+              <form onSubmit={save} className="settings-form">
+                <section className="panel">
+                  <h2 className="panel-title">注册</h2>
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={s.registration_enabled}
+                      onChange={(e) =>
+                        update("registration_enabled", e.target.checked)
+                      }
+                    />
+                    允许自助注册
+                  </label>
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={s.email_verification_required}
+                      onChange={(e) =>
+                        update("email_verification_required", e.target.checked)
+                      }
+                    />
+                    注册需要邮箱验证
+                  </label>
+                  <div className="field">
+                    <label htmlFor="settings-297">
+                      邮箱域名白名单（逗号分隔，留空不限制）
+                    </label>
+                    <input
+                      id="settings-297"
+                      value={whitelist}
+                      onChange={(e) => setWhitelist(e.target.value)}
+                      placeholder="example.com, company.org"
+                    />
+                  </div>
+                </section>
 
-          <section className="panel">
-            <h2 className="panel-title">运维</h2>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={s.personal_pages_enabled}
-                onChange={(e) => update("personal_pages_enabled", e.target.checked)}
-              />
-              允许用户创建个人分享页
-            </label>
-          </section>
+                <section className="panel">
+                  <h2 className="panel-title">运维</h2>
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={s.personal_pages_enabled}
+                      onChange={(e) =>
+                        update("personal_pages_enabled", e.target.checked)
+                      }
+                    />
+                    允许用户创建个人分享页
+                  </label>
+                </section>
 
-          <section className="panel">
-            <h2 className="panel-title">密钥共享池</h2>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={s.key_share_enabled}
-                onChange={(e) => update("key_share_enabled", e.target.checked)}
-              />
-              启用密钥共享池（仅用于探测模型）
-            </label>
-            <div className="field">
-              <label htmlFor="settings-329">可消费共享池的角色</label>
-              <Select id="settings-329"
-                ariaLabel="共享池消费者"
-                value={s.key_share_consumers}
-                onChange={(v) => update("key_share_consumers", v as "admin" | "everyone")}
-                options={[
-                  { value: "admin", label: "仅管理员" },
-                  { value: "everyone", label: "所有登录用户" },
-                ]}
-              />
-            </div>
-          </section>
+                <section className="panel">
+                  <h2 className="panel-title">密钥共享池</h2>
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={s.key_share_enabled}
+                      onChange={(e) =>
+                        update("key_share_enabled", e.target.checked)
+                      }
+                    />
+                    启用密钥共享池（仅用于探测模型）
+                  </label>
+                  <div className="field">
+                    <label htmlFor="settings-329">可消费共享池的角色</label>
+                    <Select
+                      id="settings-329"
+                      ariaLabel="共享池消费者"
+                      value={s.key_share_consumers}
+                      onChange={(v) =>
+                        update("key_share_consumers", v as "admin" | "everyone")
+                      }
+                      options={[
+                        { value: "admin", label: "仅管理员" },
+                        { value: "everyone", label: "所有登录用户" },
+                      ]}
+                    />
+                  </div>
+                </section>
 
-          <section className="panel">
-            <h2 className="panel-title">邀请码</h2>
-            <div className="field">
-              <label htmlFor="settings-345">站点「邀请码 aff」留空时的策略</label>
-              <Select id="settings-345"
-                ariaLabel="邀请码留空策略"
-                value={s.aff_blank_policy}
-                onChange={(v) =>
-                  update("aff_blank_policy", v as "none" | "random")
-                }
-                options={[
-                  { value: "none", label: "不使用邀请码（链接不带 ?aff=）" },
-                  { value: "random", label: "随机：从平台邀请码池抽取" },
-                ]}
-              />
-              <p className="field-hint">
-                站点上填了具体邀请码时始终以填写的为准；填{" "}
-                <code>RANDOM</code> 时同样从池中随机抽取。个人分享页
-                <code>/p/&lt;slug&gt;</code> 始终展示站点主人自己的邀请码，不参与随机。
-              </p>
-            </div>
-          </section>
+                <section className="panel">
+                  <h2 className="panel-title">邀请码</h2>
+                  <div className="field">
+                    <label htmlFor="settings-345">
+                      站点「邀请码 aff」留空时的策略
+                    </label>
+                    <Select
+                      id="settings-345"
+                      ariaLabel="邀请码留空策略"
+                      value={s.aff_blank_policy}
+                      onChange={(v) =>
+                        update("aff_blank_policy", v as "none" | "random")
+                      }
+                      options={[
+                        {
+                          value: "none",
+                          label: "不使用邀请码（链接不带 ?aff=）",
+                        },
+                        { value: "random", label: "随机：从平台邀请码池抽取" },
+                      ]}
+                    />
+                    <p className="field-hint">
+                      站点上填了具体邀请码时始终以填写的为准；填{" "}
+                      <code>RANDOM</code> 时同样从池中随机抽取。个人分享页
+                      <code>/p/&lt;slug&gt;</code>{" "}
+                      始终展示站点主人自己的邀请码，不参与随机。
+                    </p>
+                  </div>
+                </section>
 
-          <section className="panel">
-            <h2 className="panel-title">SMTP（邮件）</h2>
-            <div className="field">
-              <label htmlFor="settings-368">SMTP 主机</label>
-              <input id="settings-368" value={s.smtp_host} onChange={(e) => update("smtp_host", e.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="settings-372">端口（465 隐式 TLS）</label>
-              <input id="settings-372"
-                type="number"
-                value={s.smtp_port ?? ""}
-                onChange={(e) => update("smtp_port", e.target.value ? Number(e.target.value) : null)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="settings-380">用户名</label>
-              <input id="settings-380" value={s.smtp_username} onChange={(e) => update("smtp_username", e.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="settings-384">密码{s.smtp_password_set ? "（已设置，留空保持不变）" : ""}</label>
-              <input id="settings-384"
-                type="password"
-                value={smtpPassword}
-                onChange={(e) => setSmtpPassword(e.target.value)}
-                placeholder={s.smtp_password_set ? "••••••••" : ""}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="settings-393">发件人地址</label>
-              <input id="settings-393" value={s.smtp_from} onChange={(e) => update("smtp_from", e.target.value)} />
-            </div>
-          </section>
+                <section className="panel">
+                  <h2 className="panel-title">SMTP（邮件）</h2>
+                  <div className="field">
+                    <label htmlFor="settings-368">SMTP 主机</label>
+                    <input
+                      id="settings-368"
+                      value={s.smtp_host}
+                      onChange={(e) => update("smtp_host", e.target.value)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="settings-372">端口（465 隐式 TLS）</label>
+                    <input
+                      id="settings-372"
+                      type="number"
+                      value={s.smtp_port ?? ""}
+                      onChange={(e) =>
+                        update(
+                          "smtp_port",
+                          e.target.value ? Number(e.target.value) : null
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="settings-380">用户名</label>
+                    <input
+                      id="settings-380"
+                      value={s.smtp_username}
+                      onChange={(e) => update("smtp_username", e.target.value)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="settings-384">
+                      密码
+                      {s.smtp_password_set ? "（已设置，留空保持不变）" : ""}
+                    </label>
+                    <input
+                      id="settings-384"
+                      type="password"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      placeholder={s.smtp_password_set ? "••••••••" : ""}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="settings-393">发件人地址</label>
+                    <input
+                      id="settings-393"
+                      value={s.smtp_from}
+                      onChange={(e) => update("smtp_from", e.target.value)}
+                    />
+                  </div>
+                </section>
 
-          {err && <div className="error-box">{err}</div>}
-          {saved && <div className="card-domain">已保存 ✓</div>}
-          <button className="btn" type="submit">保存设置</button>
-        </form>
+                {err && <div className="error-box" role="alert">{err}</div>}
+                {saved && <div className="card-domain" role="status">已保存 ✓</div>}
+                <button className="btn" type="submit">
+                  保存设置
+                </button>
+              </form>
+
+              {/* ---- invite-code pool (a separate section, outside the settings form) ---- */}
+              {allowed && (
+                <section className="panel" style={{ marginTop: 24 }}>
+                  <h2 className="panel-title">邀请码池</h2>
+                  <p
+                    className="card-domain"
+                    style={{ marginTop: 0, lineHeight: 1.7 }}
+                  >
+                    池子由两部分自动合并：
+                    <strong>用户在自己站点上填写的邀请码</strong>，
+                    以及管理员在此处手动添加的邀请码。主页与站点详情页会从池中随机抽取一个展示；
+                    个人分享页始终展示站点主人自己的邀请码。
+                  </p>
+
+                  {pools.length === 0 ? (
+                    <div className="empty">还没有可用的邀请码。</div>
+                  ) : (
+                    pools.map((p) => (
+                      <div
+                        key={p.normalized_base_url}
+                        className="admin-subgroup"
+                      >
+                        <div className="admin-subgroup-label">
+                          {p.base_url}
+                          <span className="admin-subgroup-count">
+                            {p.codes.length}
+                          </span>
+                        </div>
+                        <div className="tag-edit-list">
+                          {p.codes.map((c) => (
+                            <span
+                              key={c.code}
+                              className="tag-edit-item"
+                              title={
+                                c.source === "admin"
+                                  ? `管理员添加${c.label ? `：${c.label}` : ""}`
+                                  : `来自站点「${c.label ?? "?"}」`
+                              }
+                            >
+                              {c.code}
+                              <span
+                                className="card-domain"
+                                style={{ marginLeft: 6 }}
+                              >
+                                {c.source === "admin" ? "管理员" : c.label}
+                              </span>
+                              {c.source === "admin" && c.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => removePoolCode(c.id!)}
+                                  disabled={poolBusy}
+                                  aria-label={`删除邀请码 ${c.code}`}
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  <form onSubmit={addPoolCode} style={{ marginTop: 16 }}>
+                    <div className="field-row">
+                      <div className="field">
+                        <label htmlFor="settings-460">站点地址</label>
+                        <input
+                          id="settings-460"
+                          value={newCodeUrl}
+                          onChange={(e) => setNewCodeUrl(e.target.value)}
+                          placeholder="https://api.example.com"
+                          required
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="settings-469">邀请码</label>
+                        <input
+                          id="settings-469"
+                          value={newCodeValue}
+                          onChange={(e) => setNewCodeValue(e.target.value)}
+                          placeholder="如 dl7w"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="settings-479">备注（可选）</label>
+                      <input
+                        id="settings-479"
+                        value={newCodeNote}
+                        onChange={(e) => setNewCodeNote(e.target.value)}
+                        placeholder="如：站长自己的码"
+                      />
+                    </div>
+                    {poolErr && <div className="error-box" role="alert">{poolErr}</div>}
+                    {poolNote && <div className="note-box" role="status">{poolNote}</div>}
+                    <button type="submit" className="btn" disabled={poolBusy}>
+                      {poolBusy ? "处理中…" : "添加到邀请码池"}
+                    </button>
+                  </form>
+                </section>
+              )}
+
+              {/* ---- migration: export / import (outside the settings form) ---- */}
+              {allowed && (
+                <section className="panel" style={{ marginTop: 24 }}>
+                  <h2 className="panel-title">数据迁移</h2>
+                  <p
+                    className="card-domain"
+                    style={{ marginTop: 0, lineHeight: 1.7 }}
+                  >
+                    导出整站数据（用户、站点、模型缓存、标签、评分、评论、统计与设置），
+                    在新服务器上导入即可完成迁移。用户密码以哈希形式携带，迁移后无需重置。
+                  </p>
+
+                  {counts && (
+                    <div className="seed-models" style={{ marginBottom: 16 }}>
+                      {Object.entries(COUNT_LABELS).map(([key, label]) => (
+                        <span key={key} className="seed-model">
+                          {label} {counts[key] ?? 0}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="field">
+                    <h3 className="field-heading">导出</h3>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={withSecrets}
+                        onChange={(e) => setWithSecrets(e.target.checked)}
+                      />
+                      包含密钥（API Key、SMTP 密码）——
+                      文件将含明文密钥，请安全保管
+                    </label>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={doExport}
+                      disabled={exporting}
+                    >
+                      {exporting ? "导出中…" : "导出全部数据"}
+                    </button>
+                  </div>
+
+                  <div className="field" style={{ marginTop: 20 }}>
+                    <h3 className="field-heading">导入</h3>
+                    <div className="field-row">
+                      <div className="field">
+                        <label htmlFor="settings-538">导入方式</label>
+                        <Select
+                          id="settings-538"
+                          ariaLabel="导入方式"
+                          value={importMode}
+                          onChange={(v) =>
+                            setImportMode(v as "merge" | "replace")
+                          }
+                          options={[
+                            {
+                              value: "merge",
+                              label: "合并（按 ID 更新，保留现有数据）",
+                            },
+                            { value: "replace", label: "覆盖（先清空再导入）" },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="application/json,.json"
+                      aria-label="选择要导入的 JSON 文件"
+                      className="model-textarea"
+                      style={{ paddingTop: 10 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={doImport}
+                      disabled={importing}
+                      style={{ marginTop: 10 }}
+                    >
+                      {importing ? "导入中…" : "导入数据"}
+                    </button>
+                  </div>
+
+                  {importErr && <div className="error-box" role="alert">{importErr}</div>}
+                  {importNote && <div className="note-box" role="status">{importNote}</div>}
+                </section>
+              )}
+            </>
           )
         }
       </ConsoleShell>
-
-      {/* ---- invite-code pool (outside the settings form) ---- */}
-      {allowed && (
-        <section className="panel" style={{ marginTop: 24 }}>
-          <h2 className="panel-title">邀请码池</h2>
-          <p className="card-domain" style={{ marginTop: 0, lineHeight: 1.7 }}>
-            池子由两部分自动合并：<strong>用户在自己站点上填写的邀请码</strong>，
-            以及管理员在此处手动添加的邀请码。主页与站点详情页会从池中随机抽取一个展示；
-            个人分享页始终展示站点主人自己的邀请码。
-          </p>
-
-          {pools.length === 0 ? (
-            <div className="empty">还没有可用的邀请码。</div>
-          ) : (
-            pools.map((p) => (
-              <div key={p.normalized_base_url} className="admin-subgroup">
-                <div className="admin-subgroup-label">
-                  {p.base_url}
-                  <span className="admin-subgroup-count">{p.codes.length}</span>
-                </div>
-                <div className="tag-edit-list">
-                  {p.codes.map((c) => (
-                    <span
-                      key={c.code}
-                      className="tag-edit-item"
-                      title={
-                        c.source === "admin"
-                          ? `管理员添加${c.label ? `：${c.label}` : ""}`
-                          : `来自站点「${c.label ?? "?"}」`
-                      }
-                    >
-                      {c.code}
-                      <span className="card-domain" style={{ marginLeft: 6 }}>
-                        {c.source === "admin" ? "管理员" : c.label}
-                      </span>
-                      {c.source === "admin" && c.id && (
-                        <button
-                          type="button"
-                          onClick={() => removePoolCode(c.id!)}
-                          disabled={poolBusy}
-                          aria-label={`删除邀请码 ${c.code}`}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-
-          <form onSubmit={addPoolCode} style={{ marginTop: 16 }}>
-            <div className="field-row">
-              <div className="field">
-                <label htmlFor="settings-460">站点地址</label>
-                <input id="settings-460"
-                  value={newCodeUrl}
-                  onChange={(e) => setNewCodeUrl(e.target.value)}
-                  placeholder="https://api.example.com"
-                  required
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="settings-469">邀请码</label>
-                <input id="settings-469"
-                  value={newCodeValue}
-                  onChange={(e) => setNewCodeValue(e.target.value)}
-                  placeholder="如 dl7w"
-                  required
-                />
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="settings-479">备注（可选）</label>
-              <input id="settings-479"
-                value={newCodeNote}
-                onChange={(e) => setNewCodeNote(e.target.value)}
-                placeholder="如：站长自己的码"
-              />
-            </div>
-            {poolErr && <div className="error-box">{poolErr}</div>}
-            {poolNote && <div className="note-box">{poolNote}</div>}
-            <button type="submit" className="btn" disabled={poolBusy}>
-              {poolBusy ? "处理中…" : "添加到邀请码池"}
-            </button>
-          </form>
-        </section>
-      )}
-
-      {/* ---- migration: export / import (outside the settings form) ---- */}
-      {allowed && (
-        <section className="panel" style={{ marginTop: 24 }}>
-          <h2 className="panel-title">数据迁移</h2>
-          <p className="card-domain" style={{ marginTop: 0, lineHeight: 1.7 }}>
-            导出整站数据（用户、站点、模型缓存、标签、评分、评论、统计与设置），
-            在新服务器上导入即可完成迁移。用户密码以哈希形式携带，迁移后无需重置。
-          </p>
-
-          {counts && (
-            <div className="seed-models" style={{ marginBottom: 16 }}>
-              {Object.entries(COUNT_LABELS).map(([key, label]) => (
-                <span key={key} className="seed-model">
-                  {label} {counts[key] ?? 0}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="field">
-            <h3 className="field-heading">导出</h3>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={withSecrets}
-                onChange={(e) => setWithSecrets(e.target.checked)}
-              />
-              包含密钥（API Key、SMTP 密码）—— 文件将含明文密钥，请安全保管
-            </label>
-            <button
-              type="button"
-              className="btn"
-              onClick={doExport}
-              disabled={exporting}
-            >
-              {exporting ? "导出中…" : "导出全部数据"}
-            </button>
-          </div>
-
-          <div className="field" style={{ marginTop: 20 }}>
-            <h3 className="field-heading">导入</h3>
-            <div className="field-row">
-              <div className="field">
-                <label htmlFor="settings-538">导入方式</label>
-                <Select id="settings-538"
-                  ariaLabel="导入方式"
-                  value={importMode}
-                  onChange={(v) => setImportMode(v as "merge" | "replace")}
-                  options={[
-                    { value: "merge", label: "合并（按 ID 更新，保留现有数据）" },
-                    { value: "replace", label: "覆盖（先清空再导入）" },
-                  ]}
-                />
-              </div>
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              aria-label="选择要导入的 JSON 文件"
-              className="model-textarea"
-              style={{ paddingTop: 10 }}
-            />
-            <button
-              type="button"
-              className="btn"
-              onClick={doImport}
-              disabled={importing}
-              style={{ marginTop: 10 }}
-            >
-              {importing ? "导入中…" : "导入数据"}
-            </button>
-          </div>
-
-          {importErr && <div className="error-box">{importErr}</div>}
-          {importNote && <div className="note-box">{importNote}</div>}
-        </section>
-      )}
 
       <ConfirmDialog
         open={pendingReplaceImport}

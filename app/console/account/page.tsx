@@ -67,7 +67,7 @@ export default function AccountSecurityPage() {
                 required
               />
             </div>
-            {err && <div className="error-box">{err}</div>}
+            {err && <div className="error-box" role="alert">{err}</div>}
             {msg && <div className="card-domain">{msg}</div>}
             <button className="btn" type="submit" disabled={busy}>
               {busy ? "提交中…" : "修改密码"}

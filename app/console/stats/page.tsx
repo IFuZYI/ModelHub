@@ -65,7 +65,12 @@ export default function AdminStatsPage() {
           ) : !allowed ? (
             <div className="empty">需要管理员权限。</div>
           ) : (
-            <div className="table-scroll">
+            <div
+              className="table-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="全服统计表格（可横向滚动）"
+            >
               <table className="data-table">
                 <thead>
                   <tr>
@@ -107,7 +112,9 @@ export default function AdminStatsPage() {
                             disabled={busy === s.normalized_base_url}
                             onClick={() => quickAdd(s.normalized_base_url)}
                           >
-                            {busy === s.normalized_base_url ? "添加中…" : "一键添加"}
+                            {busy === s.normalized_base_url
+                              ? "添加中…"
+                              : "一键添加"}
                           </button>
                         )}
                       </td>

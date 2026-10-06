@@ -116,8 +116,8 @@ export default function ProfileSettingsPage() {
                     />
                   </div>
                 </div>
-                {err && <div className="error-box">{err}</div>}
-                {saved && <div className="card-domain">已保存 ✓</div>}
+                {err && <div className="error-box" role="alert">{err}</div>}
+                {saved && <div className="card-domain" role="status">已保存 ✓</div>}
                 <button className="btn" type="submit" disabled={busy}>
                   {busy ? "保存中…" : "保存资料"}
                 </button>

@@ -91,6 +91,60 @@ def main():
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(500)
 
+        # ---- 2b. Escape inside a modal must not leak past a nested dropdown ----
+        # The add-provider modal contains a Select; Escape with the dropdown
+        # open must close ONLY the dropdown, never the whole dialog (which
+        # would discard everything typed). Regression guard for ModalShell's
+        # e.defaultPrevented check.
+        page.goto(BASE + "/console/users", wait_until="networkidle")
+        page.wait_for_timeout(800)
+        create_btn = page.query_selector('button:has-text("新建用户")')
+        if create_btn:
+            create_btn.click()
+            page.wait_for_timeout(600)
+            dlg = page.query_selector('[role="dialog"]')
+            trigger = page.query_selector('[role="dialog"] .sel-trigger')
+            if dlg and trigger:
+                trigger.click()
+                page.wait_for_timeout(400)
+                dd_open = page.query_selector('[role="dialog"] .sel-menu') is not None
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(500)
+                dlg_after = page.query_selector('[role="dialog"]') is not None
+                dd_after = page.query_selector('[role="dialog"] .sel-menu') is not None
+                if not dd_open:
+                    problems.append({
+                        "kind": "dropdown-did-not-open",
+                        "path": "/console/users",
+                        "detail": "Select menu never appeared after clicking the trigger",
+                    })
+                elif not dlg_after:
+                    problems.append({
+                        "kind": "escape-leaked-to-modal",
+                        "path": "/console/users",
+                        "detail": "Escape with the dropdown open closed the whole modal (typed form discarded)",
+                    })
+                elif dd_after:
+                    problems.append({
+                        "kind": "escape-did-not-close-dropdown",
+                        "path": "/console/users",
+                        "detail": "Escape did not close the Select menu",
+                    })
+                # second Escape (dropdown gone) must close the modal
+                if dlg_after:
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(400)
+                    if page.query_selector('[role="dialog"]') is not None:
+                        problems.append({
+                            "kind": "escape-did-not-close-modal",
+                            "path": "/console/users",
+                            "detail": "Escape no longer closes the modal after the dropdown closed",
+                        })
+            # clean up any surviving dialog
+            if page.query_selector('[role="dialog"]') is not None:
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(300)
+
         # ---- 3. editing opens the full-page editor, not a modal ----
         # Both entry points (overview cards, sites list) must land on
         # /console/providers/{id}, so check the list's 编辑 link navigates and

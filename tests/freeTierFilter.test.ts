@@ -35,7 +35,9 @@ describe("homepage free-tier filter wiring", () => {
 
   it("recomputes both lists when the free filter changes", () => {
     expect(norm).toContain("[providers, query, catFilter, freeFilter, sort]");
-    expect(norm).toContain("[hits, catFilter, freeFilter]");
+    // Search hits also recompute on sort now: the sort control applies to
+    // search results too (it used to be visible but inert in search mode).
+    expect(norm).toContain("[hits, catFilter, freeFilter, sort]");
   });
 
   it("shares one label source between the card badge and the chips", () => {
